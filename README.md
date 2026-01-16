@@ -1,6 +1,6 @@
 # Mantora
 
-Mantora is a local-first MCP observer: a lightweight UI + proxy for inspecting LLM data access (sessions, tool calls, results) with protective defaults.
+The Firewall for AI Agents. Prevent DROP TABLE and get a receipt for every SQL query your LLM runs.
 
 Claude Code / Cursor → Mantora (UI + MCP wrapper) → DuckDB/Postgres MCP server
 
