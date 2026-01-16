@@ -4,19 +4,16 @@ export class ApiError extends Error {
     message: string,
   ) {
     super(message);
-    this.name = "ApiError";
+    this.name = 'ApiError';
   }
 }
 
-export async function apiFetch<T>(
-  path: string,
-  init?: RequestInit,
-): Promise<T> {
+export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
-    cache: "no-store",
+    cache: 'no-store',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       ...(init?.headers ?? {}),
     },
   });

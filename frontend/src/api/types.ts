@@ -14,10 +14,10 @@ export type ObservedStep = {
   session_id: string;
   created_at: string;
 
-  kind: "tool_call" | "tool_result" | "note" | "blocker" | "blocker_decision";
+  kind: 'tool_call' | 'tool_result' | 'note' | 'blocker' | 'blocker_decision';
   name: string;
 
-  status: "ok" | "error";
+  status: 'ok' | 'error';
   duration_ms: number | null;
 
   summary?: string | null;
@@ -30,7 +30,7 @@ export type ObservedStep = {
   preview: TruncatedText | null;
 };
 
-export type PendingRequestStatus = "pending" | "allowed" | "denied" | "timeout";
+export type PendingRequestStatus = 'pending' | 'allowed' | 'denied' | 'timeout';
 
 export type PendingRequest = {
   id: string;
@@ -50,7 +50,7 @@ export type PendingRequest = {
   decided_at: string | null;
 };
 
-export type CastKind = "table";
+export type CastKind = 'table';
 
 export type Cast = {
   id: string;
@@ -86,7 +86,7 @@ export type PolicyRule = {
 };
 
 export type PolicyManifest = {
-  safety_mode: "protective" | "transparent";
+  safety_mode: 'protective' | 'transparent';
   active_rules: PolicyRule[];
   limits: {
     max_preview_rows: number;
@@ -96,7 +96,7 @@ export type PolicyManifest = {
 };
 
 export type BlockerDecisionArgs = {
-  decision: "allowed" | "denied";
+  decision: 'allowed' | 'denied';
   reason?: string;
   user_id?: string;
 };

@@ -11,23 +11,23 @@ export async function copyToClipboard(text: string): Promise<void> {
       await navigator.clipboard.writeText(text);
       return;
     } catch (err) {
-      console.warn("Clipboard API failed, falling back to execCommand:", err);
+      console.warn('Clipboard API failed, falling back to execCommand:', err);
     }
   }
 
   // Fallback: use execCommand (deprecated but widely supported)
-  const textarea = document.createElement("textarea");
+  const textarea = document.createElement('textarea');
   textarea.value = text;
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
   document.body.appendChild(textarea);
   textarea.focus();
   textarea.select();
 
   try {
-    const success = document.execCommand("copy");
+    const success = document.execCommand('copy');
     if (!success) {
-      throw new Error("execCommand copy returned false");
+      throw new Error('execCommand copy returned false');
     }
   } finally {
     document.body.removeChild(textarea);

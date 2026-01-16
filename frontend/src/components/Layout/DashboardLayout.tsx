@@ -1,12 +1,8 @@
-import { Box, useTheme } from "@mui/material";
-import { ReactNode } from "react";
-import {
-  Panel,
-  Group as PanelGroup,
-  Separator as PanelResizeHandle,
-} from "react-resizable-panels";
-import { AppHeader } from "./AppHeader";
-import type { ObservedStep } from "../../api/types";
+import { Box, useTheme } from '@mui/material';
+import { ReactNode } from 'react';
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
+import { AppHeader } from './AppHeader';
+import type { ObservedStep } from '../../api/types';
 
 interface DashboardLayoutProps {
   sidebar: ReactNode;
@@ -34,10 +30,10 @@ export function DashboardLayout({
   const Handle = () => (
     <PanelResizeHandle
       style={{
-        width: "1px",
+        width: '1px',
         backgroundColor: borderColor,
-        transition: "background-color 0.2s",
-        cursor: "col-resize",
+        transition: 'background-color 0.2s',
+        cursor: 'col-resize',
         flexShrink: 0,
       }}
     />
@@ -46,30 +42,27 @@ export function DashboardLayout({
   return (
     <Box
       sx={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100vh",
-        overflow: "hidden",
-        bgcolor: "background.default",
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        overflow: 'hidden',
+        bgcolor: 'background.default',
       }}
     >
       <AppHeader {...headerProps} />
       {subheader}
 
-      <Box sx={{ flexGrow: 1, overflow: "hidden" }}>
-        <PanelGroup
-          orientation="horizontal"
-          style={{ height: "100%", width: "100%" }}
-        >
+      <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
+        <PanelGroup orientation='horizontal' style={{ height: '100%', width: '100%' }}>
           <Panel
-            defaultSize="20"
-            minSize="15"
-            maxSize="30"
+            defaultSize='20'
+            minSize='15'
+            maxSize='30'
             collapsible
             style={{
-              display: "flex",
-              flexDirection: "column",
-              overflow: "hidden",
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
             }}
           >
             {sidebar}
@@ -78,12 +71,12 @@ export function DashboardLayout({
           <Handle />
 
           <Panel
-            defaultSize="50"
-            minSize="30"
+            defaultSize='50'
+            minSize='30'
             style={{
-              display: "flex",
-              flexDirection: "column",
-              overflow: "hidden",
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
             }}
           >
             {main}
@@ -92,12 +85,12 @@ export function DashboardLayout({
           <Handle />
 
           <Panel
-            defaultSize="30"
-            minSize="20"
+            defaultSize='30'
+            minSize='20'
             style={{
-              display: "flex",
-              flexDirection: "column",
-              overflow: "hidden",
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
             }}
           >
             {rightPanel}

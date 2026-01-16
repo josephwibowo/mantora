@@ -1,11 +1,8 @@
-import type { ObservedStep } from "./types";
+import type { ObservedStep } from './types';
 
 export type StepListener = (step: ObservedStep) => void;
 
-export function subscribeToSteps(
-  sessionId: string,
-  onStep: StepListener,
-): () => void {
+export function subscribeToSteps(sessionId: string, onStep: StepListener): () => void {
   const es = new EventSource(`/api/sessions/${sessionId}/stream`);
 
   const handler = (evt: MessageEvent) => {
@@ -17,10 +14,10 @@ export function subscribeToSteps(
     }
   };
 
-  es.addEventListener("step", handler as EventListener);
+  es.addEventListener('step', handler as EventListener);
 
   return () => {
-    es.removeEventListener("step", handler as EventListener);
+    es.removeEventListener('step', handler as EventListener);
     es.close();
   };
 }

@@ -20,20 +20,16 @@ import {
   Tooltip,
   Typography,
   useTheme,
-} from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import SearchIcon from "@mui/icons-material/Search";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import { ChangeEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-  useCreateSession,
-  useDeleteSession,
-  useSessions,
-} from "../api/queries";
-import { AppHeader } from "../components/Layout/AppHeader";
-import type { Session } from "../api/types";
+} from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import SearchIcon from '@mui/icons-material/Search';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import { ChangeEvent, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useCreateSession, useDeleteSession, useSessions } from '../api/queries';
+import { AppHeader } from '../components/Layout/AppHeader';
+import type { Session } from '../api/types';
 
 function formatRelativeTime(dateString: string): string {
   const date = new Date(dateString);
@@ -43,7 +39,7 @@ function formatRelativeTime(dateString: string): string {
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return "just now";
+  if (diffMins < 1) return 'just now';
   if (diffMins < 60) return `${diffMins}m ago`;
   if (diffHours < 24) return `${diffHours}h ago`;
   if (diffDays < 7) return `${diffDays}d ago`;
@@ -56,24 +52,22 @@ export function SessionsPage() {
   const { data: sessions, isLoading, error } = useSessions();
   const createSession = useCreateSession();
   const deleteSession = useDeleteSession();
-  const [title, setTitle] = useState("");
-  const [filter, setFilter] = useState("");
+  const [title, setTitle] = useState('');
+  const [filter, setFilter] = useState('');
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
 
   const handleCreate = () => {
-    createSession
-      .mutateAsync(title.trim() ? title.trim() : null)
-      .then((newSession) => {
-        if (newSession && newSession.id) {
-          navigate(`/sessions/${newSession.id}`);
-        }
-      });
+    createSession.mutateAsync(title.trim() ? title.trim() : null).then((newSession) => {
+      if (newSession && newSession.id) {
+        navigate(`/sessions/${newSession.id}`);
+      }
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !createSession.isPending) {
+    if (e.key === 'Enter' && !createSession.isPending) {
       handleCreate();
     }
   };
@@ -89,7 +83,7 @@ export function SessionsPage() {
       try {
         await deleteSession.mutateAsync(sessionToDelete);
       } catch (error) {
-        console.error("Failed to delete session:", error);
+        console.error('Failed to delete session:', error);
       } finally {
         setDeleteDialogOpen(false);
         setSessionToDelete(null);
@@ -109,42 +103,40 @@ export function SessionsPage() {
   return (
     <Box
       sx={{
-        minHeight: "100vh",
-        bgcolor: "background.default",
-        display: "flex",
-        flexDirection: "column",
+        minHeight: '100vh',
+        bgcolor: 'background.default',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
-      <AppHeader title="Dashboard" />
+      <AppHeader title='Dashboard' />
 
       <Container
-        maxWidth="lg"
-        sx={{ py: 4, flexGrow: 1, display: "flex", flexDirection: "column" }}
+        maxWidth='lg'
+        sx={{ py: 4, flexGrow: 1, display: 'flex', flexDirection: 'column' }}
       >
         {/* Toolbar */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
           <Paper
             elevation={0}
-            variant="outlined"
+            variant='outlined'
             sx={{
-              p: "4px 12px",
-              display: "flex",
-              alignItems: "center",
+              p: '4px 12px',
+              display: 'flex',
+              alignItems: 'center',
               flexGrow: 1,
               maxWidth: 400,
               borderRadius: 2,
               borderColor: theme.palette.divider,
-              bgcolor: "background.paper",
+              bgcolor: 'background.paper',
             }}
           >
-            <SearchIcon sx={{ color: "text.secondary", mr: 1, fontSize: 20 }} />
+            <SearchIcon sx={{ color: 'text.secondary', mr: 1, fontSize: 20 }} />
             <InputBase
-              sx={{ flex: 1, fontSize: "0.875rem" }}
-              placeholder="Search sessions..."
+              sx={{ flex: 1, fontSize: '0.875rem' }}
+              placeholder='Search sessions...'
               value={filter}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                setFilter(e.target.value)
-              }
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setFilter(e.target.value)}
             />
           </Paper>
 
@@ -152,76 +144,68 @@ export function SessionsPage() {
 
           <Paper
             elevation={0}
-            variant="outlined"
+            variant='outlined'
             sx={{
-              p: "4px 8px",
-              display: "flex",
-              alignItems: "center",
+              p: '4px 8px',
+              display: 'flex',
+              alignItems: 'center',
               borderRadius: 2,
               borderColor: theme.palette.divider,
-              bgcolor: "background.paper",
-              transition: "box-shadow 0.2s",
-              "&:focus-within": {
+              bgcolor: 'background.paper',
+              transition: 'box-shadow 0.2s',
+              '&:focus-within': {
                 boxShadow: `0 0 0 2px ${theme.palette.primary.main}`,
-                borderColor: "primary.main",
+                borderColor: 'primary.main',
               },
             }}
           >
             <InputBase
-              sx={{ ml: 1, flex: 1, fontSize: "0.875rem", minWidth: 200 }}
-              placeholder="New session name (optional)..."
+              sx={{ ml: 1, flex: 1, fontSize: '0.875rem', minWidth: 200 }}
+              placeholder='New session name (optional)...'
               value={title}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                setTitle(e.target.value)
-              }
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
               onKeyDown={handleKeyDown}
             />
             <Button
-              variant="contained"
-              size="small"
+              variant='contained'
+              size='small'
               onClick={handleCreate}
               disabled={createSession.isPending}
               startIcon={<AddIcon />}
               sx={{
                 ml: 1,
-                textTransform: "none",
+                textTransform: 'none',
                 fontWeight: 600,
                 borderRadius: 1.5,
               }}
             >
-              {createSession.isPending ? "Creating..." : "New Session"}
+              {createSession.isPending ? 'Creating...' : 'New Session'}
             </Button>
           </Paper>
         </Box>
 
         {/* Sessions Table */}
-        <TableContainer
-          component={Paper}
-          variant="outlined"
-          sx={{ borderRadius: 2, flexGrow: 1 }}
-        >
-          <Table size="small" stickyHeader>
+        <TableContainer component={Paper} variant='outlined' sx={{ borderRadius: 2, flexGrow: 1 }}>
+          <Table size='small' stickyHeader>
             <TableHead>
               <TableRow>
                 <TableCell
                   sx={{
                     fontWeight: 700,
-                    bgcolor: "background.default",
+                    bgcolor: 'background.default',
                     width: 60,
-                    textAlign: "center",
+                    textAlign: 'center',
                   }}
                 >
                   Status
                 </TableCell>
-                <TableCell
-                  sx={{ fontWeight: 700, bgcolor: "background.default" }}
-                >
+                <TableCell sx={{ fontWeight: 700, bgcolor: 'background.default' }}>
                   Session Name
                 </TableCell>
                 <TableCell
                   sx={{
                     fontWeight: 700,
-                    bgcolor: "background.default",
+                    bgcolor: 'background.default',
                     width: 120,
                   }}
                 >
@@ -230,7 +214,7 @@ export function SessionsPage() {
                 <TableCell
                   sx={{
                     fontWeight: 700,
-                    bgcolor: "background.default",
+                    bgcolor: 'background.default',
                     width: 140,
                   }}
                 >
@@ -239,7 +223,7 @@ export function SessionsPage() {
                 <TableCell
                   sx={{
                     fontWeight: 700,
-                    bgcolor: "background.default",
+                    bgcolor: 'background.default',
                     width: 50,
                   }}
                 ></TableCell>
@@ -249,10 +233,7 @@ export function SessionsPage() {
               {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={5}>
-                    <Typography
-                      color="text.secondary"
-                      sx={{ py: 4, textAlign: "center" }}
-                    >
+                    <Typography color='text.secondary' sx={{ py: 4, textAlign: 'center' }}>
                       Loading sessions...
                     </Typography>
                   </TableCell>
@@ -260,10 +241,7 @@ export function SessionsPage() {
               ) : error ? (
                 <TableRow>
                   <TableCell colSpan={5}>
-                    <Typography
-                      color="error"
-                      sx={{ py: 4, textAlign: "center" }}
-                    >
+                    <Typography color='error' sx={{ py: 4, textAlign: 'center' }}>
                       Error loading sessions.
                     </Typography>
                   </TableCell>
@@ -271,10 +249,7 @@ export function SessionsPage() {
               ) : filteredSessions.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5}>
-                    <Typography
-                      color="text.secondary"
-                      sx={{ py: 4, textAlign: "center" }}
-                    >
+                    <Typography color='text.secondary' sx={{ py: 4, textAlign: 'center' }}>
                       No sessions found.
                     </Typography>
                   </TableCell>
@@ -288,29 +263,27 @@ export function SessionsPage() {
                     onMouseEnter={() => setHoveredRowId(s.id)}
                     onMouseLeave={() => setHoveredRowId(null)}
                     sx={{
-                      cursor: "pointer",
-                      "&:hover": { bgcolor: "action.hover" },
+                      cursor: 'pointer',
+                      '&:hover': { bgcolor: 'action.hover' },
                     }}
                   >
-                    <TableCell align="center">
-                      <CheckCircleIcon
-                        sx={{ color: "success.main", fontSize: 18 }}
-                      />
+                    <TableCell align='center'>
+                      <CheckCircleIcon sx={{ color: 'success.main', fontSize: 18 }} />
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" fontWeight={600}>
-                        {s.title || "Untitled Session"}
+                      <Typography variant='body2' fontWeight={600}>
+                        {s.title || 'Untitled Session'}
                       </Typography>
                     </TableCell>
                     <TableCell>
                       <Chip
                         label={`#${s.id.slice(0, 6)}`}
-                        size="small"
+                        size='small'
                         sx={{
-                          fontFamily: "monospace",
-                          fontSize: "0.7rem",
+                          fontFamily: 'monospace',
+                          fontSize: '0.7rem',
                           height: 22,
-                          bgcolor: "action.hover",
+                          bgcolor: 'action.hover',
                           borderRadius: 1,
                         }}
                       />
@@ -319,13 +292,13 @@ export function SessionsPage() {
                       <Tooltip
                         title={new Date(s.created_at).toLocaleString()}
                         arrow
-                        placement="top"
+                        placement='top'
                       >
                         <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          fontFamily="monospace"
-                          sx={{ cursor: "help" }}
+                          variant='caption'
+                          color='text.secondary'
+                          fontFamily='monospace'
+                          sx={{ cursor: 'help' }}
                         >
                           {formatRelativeTime(s.created_at)}
                         </Typography>
@@ -333,20 +306,20 @@ export function SessionsPage() {
                     </TableCell>
                     <TableCell>
                       <IconButton
-                        size="small"
+                        size='small'
                         onClick={(e) => handleDeleteClick(e, s.id)}
                         disabled={deleteSession.isPending}
                         sx={{
                           opacity: hoveredRowId === s.id ? 1 : 0,
-                          transition: "opacity 0.15s, color 0.15s",
-                          color: "text.secondary",
-                          "&:hover": {
-                            color: "error.main",
-                            bgcolor: "rgba(211, 47, 47, 0.08)", // Subtle red background
+                          transition: 'opacity 0.15s, color 0.15s',
+                          color: 'text.secondary',
+                          '&:hover': {
+                            color: 'error.main',
+                            bgcolor: 'rgba(211, 47, 47, 0.08)', // Subtle red background
                           },
                         }}
                       >
-                        <DeleteOutlineIcon fontSize="small" />
+                        <DeleteOutlineIcon fontSize='small' />
                       </IconButton>
                     </TableCell>
                   </TableRow>
@@ -360,26 +333,20 @@ export function SessionsPage() {
         <Dialog
           open={deleteDialogOpen}
           onClose={cancelDelete}
-          aria-labelledby="delete-dialog-title"
-          aria-describedby="delete-dialog-description"
+          aria-labelledby='delete-dialog-title'
+          aria-describedby='delete-dialog-description'
         >
-          <DialogTitle id="delete-dialog-title">Delete Session?</DialogTitle>
+          <DialogTitle id='delete-dialog-title'>Delete Session?</DialogTitle>
           <DialogContent>
-            <DialogContentText id="delete-dialog-description">
-              Are you sure you want to delete this session? This action cannot
-              be undone.
+            <DialogContentText id='delete-dialog-description'>
+              Are you sure you want to delete this session? This action cannot be undone.
             </DialogContentText>
           </DialogContent>
           <DialogActions>
-            <Button onClick={cancelDelete} color="inherit">
+            <Button onClick={cancelDelete} color='inherit'>
               Cancel
             </Button>
-            <Button
-              onClick={confirmDelete}
-              color="error"
-              variant="contained"
-              autoFocus
-            >
+            <Button onClick={confirmDelete} color='error' variant='contained' autoFocus>
               Delete
             </Button>
           </DialogActions>

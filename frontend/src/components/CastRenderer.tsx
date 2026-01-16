@@ -1,5 +1,5 @@
-import type { Cast } from "../api/types";
-import { TableCast } from "./TableCast";
+import type { Cast } from '../api/types';
+import { TableCast } from './TableCast';
 
 type Props = {
   cast: Cast;
@@ -13,7 +13,7 @@ type Props = {
  */
 export function CastRenderer({ cast, onStepClick }: Props) {
   switch (cast.kind) {
-    case "table":
+    case 'table':
       return <TableCast cast={cast} onStepClick={onStepClick} />;
     default:
       return null;

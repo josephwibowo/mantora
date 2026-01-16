@@ -1,14 +1,7 @@
-import {
-  Box,
-  Chip,
-  IconButton,
-  Paper,
-  Tooltip,
-  Typography,
-} from "@mui/material";
-import { ReactNode } from "react";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import CodeIcon from "@mui/icons-material/Code";
+import { Box, Chip, IconButton, Paper, Tooltip, Typography } from '@mui/material';
+import { ReactNode } from 'react';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CodeIcon from '@mui/icons-material/Code';
 
 interface ArtifactTileProps {
   title: string;
@@ -27,13 +20,13 @@ export function ArtifactTile({
 }: ArtifactTileProps) {
   return (
     <Paper
-      variant="outlined"
+      variant='outlined'
       sx={{
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
         mb: 3,
-        borderColor: "divider",
+        borderColor: 'divider',
       }}
     >
       {/* Header */}
@@ -41,40 +34,40 @@ export function ArtifactTile({
         sx={{
           p: 1.5,
           borderBottom: 1,
-          borderColor: "divider",
-          bgcolor: "action.hover",
-          display: "flex",
-          alignItems: "center",
+          borderColor: 'divider',
+          bgcolor: 'action.hover',
+          display: 'flex',
+          alignItems: 'center',
           gap: 2,
         }}
       >
         <Chip
           label={type}
-          size="small"
+          size='small'
           sx={{
-            fontSize: "0.65rem",
+            fontSize: '0.65rem',
             height: 20,
             borderRadius: 1,
             fontWeight: 600,
           }}
         />
 
-        <Typography variant="subtitle2" sx={{ fontWeight: 600, flexGrow: 1 }}>
+        <Typography variant='subtitle2' sx={{ fontWeight: 600, flexGrow: 1 }}>
           {title}
         </Typography>
 
-        <Box sx={{ display: "flex", gap: 0.5 }}>
+        <Box sx={{ display: 'flex', gap: 0.5 }}>
           {onCopySQL && (
-            <Tooltip title="Copy SQL">
-              <IconButton size="small" onClick={onCopySQL}>
-                <CodeIcon fontSize="small" />
+            <Tooltip title='Copy SQL'>
+              <IconButton size='small' onClick={onCopySQL}>
+                <CodeIcon fontSize='small' />
               </IconButton>
             </Tooltip>
           )}
           {onCopyMarkdown && (
-            <Tooltip title="Copy Markdown">
-              <IconButton size="small" onClick={onCopyMarkdown}>
-                <ContentCopyIcon fontSize="small" />
+            <Tooltip title='Copy Markdown'>
+              <IconButton size='small' onClick={onCopyMarkdown}>
+                <ContentCopyIcon fontSize='small' />
               </IconButton>
             </Tooltip>
           )}
@@ -82,7 +75,7 @@ export function ArtifactTile({
       </Box>
 
       {/* Content */}
-      <Box sx={{ p: 0, overflow: "auto" }}>{children}</Box>
+      <Box sx={{ p: 0, overflow: 'auto' }}>{children}</Box>
     </Paper>
   );
 }

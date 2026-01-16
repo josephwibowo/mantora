@@ -12,14 +12,14 @@ export function rowsToMarkdownTable(
   truncated: boolean = false,
 ): string {
   if (rows.length === 0 || columns.length === 0) {
-    return "";
+    return '';
   }
 
   // Header row
-  const header = `| ${columns.join(" | ")} |`;
+  const header = `| ${columns.join(' | ')} |`;
 
   // Separator row
-  const separator = `| ${columns.map(() => "---").join(" | ")} |`;
+  const separator = `| ${columns.map(() => '---').join(' | ')} |`;
 
   // Data rows
   const dataRows = rows.map((row) => {
@@ -27,19 +27,19 @@ export function rowsToMarkdownTable(
       const value = row[col];
       // Format value for markdown (escape pipes, handle nulls)
       if (value === null || value === undefined) {
-        return "null";
+        return 'null';
       }
-      return String(value).replace(/\|/g, "\\|").replace(/\n/g, " ");
+      return String(value).replace(/\|/g, '\\|').replace(/\n/g, ' ');
     });
-    return `| ${cells.join(" | ")} |`;
+    return `| ${cells.join(' | ')} |`;
   });
 
   const lines = [header, separator, ...dataRows];
 
   if (truncated) {
-    lines.push("");
-    lines.push("*Note: Data has been truncated for display*");
+    lines.push('');
+    lines.push('*Note: Data has been truncated for display*');
   }
 
-  return lines.join("\n");
+  return lines.join('\n');
 }

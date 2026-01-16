@@ -1,7 +1,7 @@
-import { createTheme, PaletteMode, ThemeOptions } from "@mui/material";
-import { getPalette } from "./palette";
-import { getTypography } from "./typography";
-import { getComponents } from "./components";
+import { createTheme, PaletteMode, ThemeOptions } from '@mui/material';
+import { getPalette } from './palette';
+import { getTypography } from './typography';
+import { getComponents } from './components';
 
 export const getDesignTokens = (mode: PaletteMode): ThemeOptions => {
   // 1. Create a base theme to pass to getComponents (so it can access palette)

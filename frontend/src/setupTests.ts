@@ -1,4 +1,4 @@
-import "@testing-library/jest-dom";
+import '@testing-library/jest-dom';
 
 // Mock EventSource for SSE
 class MockEventSource {
@@ -9,7 +9,7 @@ class MockEventSource {
   readonly OPEN = 1;
   readonly CLOSED = 2;
   readyState = 0;
-  url = "";
+  url = '';
   withCredentials = false;
 
   constructor(url: string) {
