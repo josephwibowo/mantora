@@ -49,15 +49,15 @@ jobs:
               assert any(name.startswith("mantora/_static/") for name in names), "_static missing"
               assert "mantora/_demo/duckdb_seed.sql" in names, "duckdb demo seed missing"
 
-               metadata_name = next(
-                   name for name in names if name.endswith(".dist-info/METADATA")
-               )
-               metadata = zf.read(metadata_name).decode("utf-8")
-               version = re.search(r"^Version: (.+)$", metadata, re.MULTILINE).group(1)
+              metadata_name = next(
+                  name for name in names if name.endswith(".dist-info/METADATA")
+              )
+              metadata = zf.read(metadata_name).decode("utf-8")
+              version = re.search(r"^Version: (.+)$", metadata, re.MULTILINE).group(1)
 
-               assert "Provides-Extra: duckdb" in metadata, "duckdb extra missing"
-               assert "Provides-Extra: postgres" in metadata, "postgres extra missing"
-               assert "Provides-Extra: all" in metadata, "all extra missing"
+              assert "Provides-Extra: duckdb" in metadata, "duckdb extra missing"
+              assert "Provides-Extra: postgres" in metadata, "postgres extra missing"
+              assert "Provides-Extra: all" in metadata, "all extra missing"
 
           import sys
           sys.path.insert(0, "backend/src")
