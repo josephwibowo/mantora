@@ -38,7 +38,7 @@ jobs:
 
       - name: Validate tag matches version
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          export TAG="${GITHUB_REF_NAME#v}"
           echo "TAG=$TAG" >> "$GITHUB_ENV"
           python - <<'PY'
           import os
