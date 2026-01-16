@@ -1,0 +1,102 @@
+name: Distribution Build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build frontend
+        run: |
+          corepack enable
+          pnpm install
+          pnpm build
+        working-directory: frontend
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build pipx twine
+
+      - name: Build dist (wheel + sdist)
+        env:
+          MANTORA_ENFORCE_FRONTEND_DIST: "1"
+        run: |
+          python -m build backend --outdir dist
+          python - <<'PY'
+          import glob
+          import re
+          import zipfile
+
+          wheels = glob.glob("dist/mantora-*.whl")
+          assert wheels, "No wheel found"
+          wheel = wheels[0]
+
+          with zipfile.ZipFile(wheel) as zf:
+              names = set(zf.namelist())
+              assert any(name.startswith("mantora/_static/") for name in names), "_static missing"
+              assert "mantora/_demo/duckdb_seed.sql" in names, "duckdb demo seed missing"
+
+               metadata_name = next(
+                   name for name in names if name.endswith(".dist-info/METADATA")
+               )
+               metadata = zf.read(metadata_name).decode("utf-8")
+               version = re.search(r"^Version: (.+)$", metadata, re.MULTILINE).group(1)
+
+               assert "Provides-Extra: duckdb" in metadata, "duckdb extra missing"
+               assert "Provides-Extra: postgres" in metadata, "postgres extra missing"
+               assert "Provides-Extra: all" in metadata, "all extra missing"
+
+          import sys
+          sys.path.insert(0, "backend/src")
+          import mantora  # noqa: E402
+
+          assert version == mantora.__version__, "wheel version != mantora.__version__"
+          PY
+
+      - name: Validate metadata
+        run: python -m twine check --strict dist/*
+
+      - name: Pipx install (wheel)
+        run: |
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          WHEEL="$(ls dist/mantora-*.whl | head -n 1)"
+          python -m pipx install "$WHEEL"
+          mantora --help
+          mantora --version
+
+      - name: Pipx install (extras)
+        env:
+          MANTORA_ENFORCE_FRONTEND_DIST: "1"
+        run: |
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+          python -m pipx uninstall mantora || true
+          python -m pipx install './backend[duckdb]'
+          python -m pipx runpip mantora show duckdb
+          python -m pipx runpip mantora show mcp-server-duckdb
+          mantora --version
+
+          python -m pipx uninstall mantora || true
+          python -m pipx install './backend[postgres]'
+          python -m pipx runpip mantora show mcp-server-postgres
+          mantora --version
+
+          python -m pipx uninstall mantora || true
+          python -m pipx install './backend[all]'
+          python -m pipx runpip mantora show duckdb
+          python -m pipx runpip mantora show mcp-server-duckdb
+          python -m pipx runpip mantora show mcp-server-postgres
+          mantora --version

@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v2
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "backend/pyproject.toml"
+
+      - name: Install dependencies
+        working-directory: backend
+        run: uv sync --all-extras --dev
+
+      - name: Lint (Ruff)
+        working-directory: backend
+        run: uv run ruff check .
+
+      - name: Check Formatting (Ruff)
+        working-directory: backend
+        run: uv run ruff format --check .
+
+      - name: Type Check (Mypy)
+        working-directory: backend
+        run: uv run mypy src tests
+
+      - name: Test (Pytest)
+        working-directory: backend
+        run: uv run pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: |
+          corepack enable
+          pnpm install
+
+      - name: Type Check (TSC)
+        run: pnpm typecheck
+
+      - name: Lint (ESLint)
+        run: pnpm lint
+
+      - name: Check Formatting (Prettier)
+        run: pnpm format:check

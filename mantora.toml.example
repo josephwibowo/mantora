@@ -1,0 +1,18 @@
+# Legacy mantora.toml configuration for local testing (prefer config.toml)
+
+# Safety mode: protective (default) or transparent
+# safety_mode = "protective"
+
+# Target MCP server configuration
+[target]
+# For DuckDB testing, use the mock server running in Docker
+# type = "duckdb"
+# command = ["docker", "exec", "-i", "mantora-mcp-mock-duckdb-1", "uv", "run", "python", "tests/fixtures/mock_duckdb_server.py"]
+
+# For Postgres testing, use the mock server running in Docker  
+# type = "postgres"
+# command = ["docker", "exec", "-i", "mantora-mcp-mock-postgres-1", "uv", "run", "python", "tests/fixtures/mock_postgres_server.py"]
+
+# For simple echo testing, use the stub server
+type = "generic"
+command = ["python", "backend/tests/stub_mcp_server.py"]

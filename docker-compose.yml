@@ -1,0 +1,46 @@
+services:
+  # Main Mantora app (backend + frontend)
+  mantora-app:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    environment:
+      - MANTORA_STORAGE__BACKEND=sqlite
+      - MANTORA_STORAGE__SQLITE__PATH=/data/sessions.db
+      - MANTORA_FRONTEND_DIST=/frontend/dist
+    networks:
+      - mantora-net
+
+  # Mock DuckDB MCP server
+  mock-duckdb:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["uv", "run", "python", "tests/fixtures/mock_duckdb_server.py"]
+    networks:
+      - mantora-net
+    stdin_open: true
+    tty: true
+
+  # Mock Postgres MCP server
+  mock-postgres:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["uv", "run", "python", "tests/fixtures/mock_postgres_server.py"]
+
+    networks:
+      - mantora-net
+    stdin_open: true
+    tty: true
+
+volumes:
+  mantora-data:
+
+networks:
+  mantora-net:
+    driver: bridge

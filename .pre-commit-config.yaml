@@ -1,0 +1,52 @@
+repos:
+  # Backend Python checks
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+
+  - repo: local
+    hooks:
+      - id: mypy-backend
+        name: mypy (backend)
+        entry: bash -c 'cd backend && uv run mypy src tests'
+        pass_filenames: false
+        files: ^backend/
+        language: system
+
+      - id: pytest-backend
+        name: pytest (backend)
+        entry: uv run --project backend pytest
+        pass_filenames: false
+        files: ^backend/
+        language: system
+
+  # Frontend JavaScript/TypeScript checks
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint
+        entry: bash -c 'cd frontend && pnpm eslint .'
+        files: ^frontend/
+        language: system
+        pass_filenames: false
+
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v4.0.0-alpha.8
+    hooks:
+      - id: prettier
+        files: ^frontend/
+        exclude: pnpm-lock.yaml
+
+  - repo: local
+    hooks:
+      - id: tsc-frontend
+        name: tsc (frontend)
+        entry: pnpm --filter frontend typecheck
+        pass_filenames: false
+        files: ^frontend/
+        language: system
