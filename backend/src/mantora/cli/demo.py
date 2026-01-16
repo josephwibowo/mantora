@@ -50,7 +50,7 @@ def _get_demo_dir() -> Path | None:
 
 def _seed_duckdb(db_path: Path, seed_sql: str) -> None:
     try:
-        import duckdb  # type: ignore[import-not-found]
+        import duckdb
     except ImportError as exc:
         raise RuntimeError(
             "duckdb is required for mantora demo duckdb. "

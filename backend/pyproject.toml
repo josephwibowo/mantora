@@ -81,3 +81,7 @@ strict = true
 warn_unused_configs = true
 warn_unused_ignores = true
 mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["duckdb", "uvicorn"]
+ignore_missing_imports = true
