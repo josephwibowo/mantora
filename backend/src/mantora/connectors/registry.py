@@ -7,9 +7,12 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from mantora.connectors.bigquery import BigQueryAdapter
+from mantora.connectors.databricks import DatabricksAdapter
 from mantora.connectors.duckdb import DuckDBAdapter
 from mantora.connectors.interface import Adapter, BaseAdapter, StepCategory
 from mantora.connectors.postgres import PostgresAdapter
+from mantora.connectors.snowflake import SnowflakeAdapter
 
 
 class GenericAdapter(BaseAdapter):
@@ -40,6 +43,12 @@ _ADAPTERS: dict[str, type[Adapter]] = {
     "postgres": PostgresAdapter,
     "postgresql": PostgresAdapter,  # Alias
     "pg": PostgresAdapter,  # Alias
+    "snowflake": SnowflakeAdapter,
+    "sf": SnowflakeAdapter,  # Alias
+    "bigquery": BigQueryAdapter,
+    "bq": BigQueryAdapter,  # Alias
+    "databricks": DatabricksAdapter,
+    "databricks_sql": DatabricksAdapter,  # Alias
     "generic": GenericAdapter,
 }
 
