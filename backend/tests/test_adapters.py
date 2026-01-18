@@ -7,9 +7,12 @@ from dataclasses import dataclass
 import pytest
 
 from mantora.connectors import (
+    BigQueryAdapter,
+    DatabricksAdapter,
     DuckDBAdapter,
     NormalizedStep,
     PostgresAdapter,
+    SnowflakeAdapter,
     get_adapter,
     list_adapters,
 )
@@ -31,6 +34,24 @@ def test_get_adapter_postgres() -> None:
     adapter = get_adapter("postgres")
     assert isinstance(adapter, PostgresAdapter)
     assert adapter.target_type == "postgres"
+
+
+def test_get_adapter_snowflake() -> None:
+    adapter = get_adapter("snowflake")
+    assert isinstance(adapter, SnowflakeAdapter)
+    assert adapter.target_type == "snowflake"
+
+
+def test_get_adapter_bigquery() -> None:
+    adapter = get_adapter("bigquery")
+    assert isinstance(adapter, BigQueryAdapter)
+    assert adapter.target_type == "bigquery"
+
+
+def test_get_adapter_databricks() -> None:
+    adapter = get_adapter("databricks")
+    assert isinstance(adapter, DatabricksAdapter)
+    assert adapter.target_type == "databricks"
 
 
 def test_get_adapter_postgres_aliases() -> None:
@@ -57,6 +78,9 @@ def test_list_adapters() -> None:
     adapters = list_adapters()
     assert "duckdb" in adapters
     assert "postgres" in adapters
+    assert "snowflake" in adapters
+    assert "bigquery" in adapters
+    assert "databricks" in adapters
     assert "generic" in adapters
 
 

@@ -16,6 +16,20 @@ def _get_active_rules(policy: PolicyConfig) -> list[PolicyRule]:
         return []
 
     rules: list[PolicyRule] = []
+    rules.append(
+        PolicyRule(
+            id="unknown_tool_requires_approval",
+            label="Unknown tool requires approval",
+            description="Blocks unknown tools until explicitly approved",
+        )
+    )
+    rules.append(
+        PolicyRule(
+            id="block_destructive",
+            label="Block destructive SQL",
+            description="Blocks destructive SQL operations detected by conservative heuristics",
+        )
+    )
     if policy.block_ddl:
         rules.append(
             PolicyRule(

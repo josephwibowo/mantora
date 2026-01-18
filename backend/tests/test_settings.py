@@ -18,9 +18,11 @@ def test_get_settings_protective_mode() -> None:
 
     data = response.json()
     assert data["safety_mode"] == "protective"
-    assert len(data["active_rules"]) == 4  # DDL, DML, multi-statement, DELETE w/o WHERE
+    assert len(data["active_rules"]) == 6  # includes always-on + toggle-driven rules
 
     rule_ids = {rule["id"] for rule in data["active_rules"]}
+    assert "unknown_tool_requires_approval" in rule_ids
+    assert "block_destructive" in rule_ids
     assert "block_ddl" in rule_ids
     assert "block_dml" in rule_ids
     assert "block_multi_statement" in rule_ids

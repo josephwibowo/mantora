@@ -29,3 +29,18 @@ sqlite_path = "./data/sessions.db"
 type = "duckdb"
 command = ["mcp-server-duckdb", "--db", "./demo.duckdb"]
 # env = { "KEY" = "VALUE" }
+
+# Mode B examples (Mantora wraps a separately spawned MCP server via stdio).
+# Mantora does not manage credentials; prefer local auth tooling and external env vars.
+#
+# [target]
+# type = "snowflake"
+# command = ["mcp-server-snowflake"]
+#
+# [target]
+# type = "bigquery"
+# command = ["mcp-server-bigquery"]
+#
+# [target]
+# type = "databricks"
+# command = ["mcp-server-databricks-sql"]
