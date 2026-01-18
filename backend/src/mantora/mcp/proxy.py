@@ -29,18 +29,23 @@ from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
+from pydantic import JsonValue
 
 from mantora.config import ProxyConfig
+from mantora.config.settings import PolicyConfig
 from mantora.connectors.registry import get_adapter
 from mantora.mcp.tools import CastTools, SessionTools
 from mantora.models.events import ObservedStep, TruncatedText
 from mantora.policy.allowlist import is_tool_known_safe
 from mantora.policy.blocker import PendingDecision, PendingRequest, PendingStatus, blocker_summary
-from mantora.policy.sql_guard import analyze_sql, should_block_sql
+from mantora.policy.sql_guard import SQLGuardResult, SQLWarning, analyze_sql, should_block_sql
 from mantora.policy.truncation import cap_text
 from mantora.store import SessionStore
 
 logger = logging.getLogger(__name__)
+
+SQL_EXCERPT_CAP_BYTES = 8 * 1024
+ERROR_MESSAGE_CAP_BYTES = 2 * 1024
 
 
 @dataclass
@@ -410,16 +415,27 @@ class MCPProxy:
 
         session_id = UUID(session_id_str)
 
-        # Analyze SQL for warnings if this is a query tool
-        risk_level: str | None = None
-        warnings: list[str] | None = None
         adapter = get_adapter(self.config.target.type or "generic")
+        target_type = adapter.target_type
         category = "cast" if name == "cast_table" else adapter.categorize_tool(name)
 
-        if status == "ok" and category == "query":
-            error_message = _extract_query_error_message(result)
-            if error_message:
-                status = "error"
+        # Receipt/trace v1 fields (optional)
+        sql: TruncatedText | None = None
+        sql_classification: str | None = None
+        risk_level: str | None = None
+        warnings: list[str] | None = None
+        error_message: str | None = None
+        result_rows_shown: int | None = None
+        result_rows_total: int | None = None
+        captured_bytes: int | None = None
+
+        if category == "cast" and isinstance(result, dict):
+            rows_shown = result.get("rows_shown")
+            total_rows = result.get("total_rows")
+            if isinstance(rows_shown, int):
+                result_rows_shown = rows_shown
+            if isinstance(total_rows, int):
+                result_rows_total = total_rows
 
         sql_for_analysis: str | None = None
         if name == "cast_table":
@@ -430,7 +446,11 @@ class MCPProxy:
                 sql_for_analysis = self._extract_sql_argument(tool_name=name, arguments=args)
 
         if sql_for_analysis:
+            sql_text, sql_truncated = cap_text(sql_for_analysis, max_bytes=SQL_EXCERPT_CAP_BYTES)
+            sql = TruncatedText(text=sql_text, truncated=sql_truncated)
+
             guard_result = analyze_sql(sql_for_analysis)
+            sql_classification = guard_result.classification.value
             risk_level = guard_result.risk_level.value
             if guard_result.warnings:
                 warnings = [w.value for w in guard_result.warnings]
@@ -457,6 +477,25 @@ class MCPProxy:
 
         capped, truncated = cap_text(res_str, max_bytes=1024)  # Use 1KB for preview
 
+        if category == "query":
+            extracted_error = _extract_query_error_message(result)
+            if extracted_error:
+                capped_error, _ = cap_text(extracted_error, max_bytes=ERROR_MESSAGE_CAP_BYTES)
+                error_message = capped_error
+                status = "error"
+
+        if status == "error" and error_message is None:
+            extracted_error = _extract_query_error_message(result)
+            if extracted_error:
+                capped_error, _ = cap_text(extracted_error, max_bytes=ERROR_MESSAGE_CAP_BYTES)
+                error_message = capped_error
+
+        captured_bytes = len(capped.encode("utf-8"))
+        if sql is not None:
+            captured_bytes += len(sql.text.encode("utf-8"))
+        if error_message is not None:
+            captured_bytes += len(error_message.encode("utf-8"))
+
         stepped_step_id = step_id or uuid4()
 
         step = ObservedStep(
@@ -470,6 +509,14 @@ class MCPProxy:
             summary=_compute_step_summary(name=name, status=status),
             risk_level=risk_level,
             warnings=warnings,
+            target_type=target_type,
+            tool_category=category if category != "session" else None,
+            sql=sql,
+            sql_classification=sql_classification,
+            result_rows_shown=result_rows_shown,
+            result_rows_total=result_rows_total,
+            captured_bytes=captured_bytes,
+            error_message=error_message,
             args=args,
             result=(
                 serialized_result
@@ -550,6 +597,9 @@ class MCPProxy:
         # Create pending request for cross-process UI approval
         pending_id = uuid4()
         guard = analyze_sql(sql)
+        policy_rule_ids = _derive_policy_rule_ids_from_sql_guard(
+            guard=guard, policy=self.config.policy
+        )
 
         session_id_str = self._session_tools.session_current(connection_id=self._connection_id)
         if session_id_str is None:
@@ -566,6 +616,14 @@ class MCPProxy:
             blocker_step_id=None,
         )
 
+        adapter = get_adapter(self.config.target.type or "generic")
+        target_type = adapter.target_type
+        category = adapter.categorize_tool(name)
+        tool_category = "query" if sql else category
+
+        sql_text, sql_truncated = cap_text(sql, max_bytes=SQL_EXCERPT_CAP_BYTES)
+        sql_excerpt = TruncatedText(text=sql_text, truncated=sql_truncated)
+
         # Record a blocker step for UI + export
         blocker_step = ObservedStep(
             id=uuid4(),
@@ -577,6 +635,14 @@ class MCPProxy:
             duration_ms=None,
             summary=f"Blocked: {pending.reason or 'High-risk SQL'}",
             risk_level=pending.risk_level,
+            warnings=[w.value for w in guard.warnings] if guard.warnings else None,
+            target_type=target_type,
+            tool_category=tool_category if tool_category != "session" else None,
+            sql=sql_excerpt,
+            sql_classification=guard.classification.value,
+            policy_rule_ids=policy_rule_ids,
+            decision="pending",
+            captured_bytes=len(sql_excerpt.text.encode("utf-8")),
             args={
                 "request_id": str(pending.id),
                 "sql": (
@@ -585,6 +651,7 @@ class MCPProxy:
                 "reason": pending.reason,
                 "classification": pending.classification,
                 "risk_level": pending.risk_level,
+                "policy_rule_ids": cast(JsonValue, policy_rule_ids),
             },
             result=None,
             preview=None,
@@ -656,6 +723,11 @@ class MCPProxy:
             blocker_step_id=None,
         )
 
+        adapter = get_adapter(self.config.target.type or "generic")
+        target_type = adapter.target_type
+        category = adapter.categorize_tool(name)
+        policy_rule_ids = ["unknown_tool_requires_approval"]
+
         blocker_step = ObservedStep(
             id=uuid4(),
             session_id=UUID(session_id_str),
@@ -666,10 +738,15 @@ class MCPProxy:
             duration_ms=None,
             summary=f"Blocked: {reason}",
             risk_level=pending.risk_level,
+            target_type=target_type,
+            tool_category=category if category != "session" else None,
+            policy_rule_ids=policy_rule_ids,
+            decision="pending",
             args={
                 "request_id": str(pending.id),
                 "reason": pending.reason,
                 "tool_name": name,
+                "policy_rule_ids": cast(JsonValue, policy_rule_ids),
             },
             result=None,
             preview=None,
@@ -921,3 +998,30 @@ def _redact_cast_table_args(args: dict[str, Any]) -> dict[str, Any]:
     else:
         redacted["rows"] = "<omitted>"
     return redacted
+
+
+def _derive_policy_rule_ids_from_sql_guard(
+    *, guard: SQLGuardResult, policy: PolicyConfig
+) -> list[str]:
+    """Derive policy rule ids fired for a blocked SQL statement.
+
+    Uses coarse-grained rule IDs that are safe to persist/export.
+    """
+    warnings = set(guard.warnings)
+
+    rule_ids: list[str] = []
+
+    if SQLWarning.MULTI_STATEMENT in warnings and policy.block_multi_statement:
+        rule_ids.append("block_multi_statement")
+    if SQLWarning.DELETE_NO_WHERE in warnings and policy.block_delete_without_where:
+        rule_ids.append("block_delete_without_where")
+    if SQLWarning.DDL in warnings and policy.block_ddl:
+        rule_ids.append("block_ddl")
+    if SQLWarning.DML in warnings and policy.block_dml:
+        rule_ids.append("block_dml")
+
+    # Fallback for blocked operations that don't map cleanly to a toggle.
+    if not rule_ids:
+        rule_ids.append("block_destructive")
+
+    return rule_ids

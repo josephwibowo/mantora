@@ -103,11 +103,18 @@ class MemorySessionStore(SessionStore):
                     # Validate status is a valid literal
                     if updated_status not in ("ok", "error"):
                         return False
+
+                    updated_decision = step.decision
+                    decision_value = updated_args.get("decision")
+                    if isinstance(decision_value, str):
+                        updated_decision = decision_value  # type: ignore[assignment]
+
                     updated_step = ObservedStep(
-                        **step.model_dump(exclude={"summary", "status", "args"}),
+                        **step.model_dump(exclude={"summary", "status", "args", "decision"}),
                         summary=summary if summary is not None else step.summary,
                         status=updated_status,  # type: ignore
                         args=updated_args,
+                        decision=updated_decision,
                     )
                     self._steps[session_id][i] = updated_step
                     # Notify via queue
