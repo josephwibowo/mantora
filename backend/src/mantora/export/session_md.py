@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from mantora.casts.models import Cast, TableCast
 from mantora.config.settings import Caps
-from mantora.models.events import ObservedStep, SessionSummary
+from mantora.models.events import ObservedStep, SessionSummary, StepDecision, TruncatedText
 from mantora.policy.truncation import cap_text
 from mantora.store.interface import SessionStore
 
@@ -86,43 +86,88 @@ def _format_step(*, step: ObservedStep, index: int, caps: Caps) -> str:
         header += f"- Duration: `{step.duration_ms}ms`\n"
     if step.risk_level is not None:
         header += f"- Risk: `{step.risk_level}`\n"
+    if step.warnings:
+        header += f"- Warnings: `{', '.join(step.warnings)}`\n"
     if step.summary is not None:
         header += f"- Summary: {step.summary}\n"
 
-    body = ""
+    receipt = ""
+    if step.target_type is not None:
+        receipt += f"- Target: `{step.target_type}`\n"
+    if step.tool_category is not None:
+        receipt += f"- Category: `{step.tool_category}`\n"
+    sql_classification = step.sql_classification
+    if sql_classification is None and isinstance(step.args, dict):
+        raw_classification = step.args.get("classification")
+        if isinstance(raw_classification, str):
+            sql_classification = raw_classification
+    if sql_classification is not None:
+        receipt += f"- SQL classification: `{sql_classification}`\n"
+    policy_rule_ids = step.policy_rule_ids
+    if policy_rule_ids is None and isinstance(step.args, dict):
+        raw_rule_ids = step.args.get("policy_rule_ids")
+        if isinstance(raw_rule_ids, list) and all(isinstance(x, str) for x in raw_rule_ids):
+            policy_rule_ids = cast(list[str], raw_rule_ids)
+    if policy_rule_ids:
+        receipt += f"- Policy rules: `{', '.join(policy_rule_ids)}`\n"
 
-    # Blocker steps: render attempted SQL + reason/decision explicitly.
-    if step.kind in ("blocker", "blocker_decision"):
-        args = step.args if isinstance(step.args, dict) else {}
-        sql = args.get("sql")
-        reason = args.get("reason")
-        decision = args.get("decision")
-        request_id = args.get("request_id")
+    decision = step.decision
+    if decision is None and isinstance(step.args, dict):
+        raw_decision = step.args.get("decision")
+        if raw_decision in ("pending", "allowed", "denied", "timeout"):
+            decision = cast(StepDecision, raw_decision)
+    if decision is not None:
+        receipt += f"- Decision: `{decision}`\n"
 
+    if step.kind in ("blocker", "blocker_decision") and isinstance(step.args, dict):
+        request_id = step.args.get("request_id")
+        reason = step.args.get("reason")
         if request_id:
-            body += f"\n- Pending request: `{request_id}`\n"
-        if decision:
-            body += f"- Decision: `{decision}`\n"
+            receipt += f"- Pending request: `{request_id}`\n"
         if reason:
-            body += f"- Reason: {reason}\n"
-        if sql:
-            sql_text, sql_truncated = cap_text(str(sql), max_bytes=caps.max_preview_payload_bytes)
-            body += "\n**SQL**\n\n```sql\n" + sql_text.rstrip("\n") + "\n```\n"
-            if sql_truncated:
-                body += "_SQL truncated._\n"
+            receipt += f"- Reason: {reason}\n"
+    if step.result_rows_shown is not None:
+        receipt += f"- Rows shown: {step.result_rows_shown}\n"
+    if step.result_rows_total is not None:
+        receipt += f"- Total rows: {step.result_rows_total}\n"
+    if step.captured_bytes is not None:
+        receipt += f"- Captured bytes: {step.captured_bytes}\n"
+    if step.error_message is not None:
+        receipt += f"- Error: {step.error_message}\n"
+
+    body = ""
+    if receipt:
+        body += "\n**Receipt v1**\n\n" + receipt
+
+    # Render SQL (query/cast/blocker steps).
+    sql_value: TruncatedText | None = step.sql
+    if sql_value is None and isinstance(step.args, dict):
+        raw_sql = step.args.get("sql")
+        if raw_sql is not None:
+            sql_text, sql_truncated = cap_text(
+                str(raw_sql), max_bytes=caps.max_preview_payload_bytes
+            )
+            sql_value = TruncatedText(text=sql_text, truncated=sql_truncated)
+
+    if sql_value is not None:
+        sql_text, was_truncated = cap_text(sql_value.text, max_bytes=caps.max_preview_payload_bytes)
+        truncated = bool(sql_value.truncated or was_truncated)
+        body += "\n**SQL**\n\n```sql\n" + sql_text.rstrip("\n") + "\n```\n"
+        if truncated:
+            body += "_SQL truncated._\n"
 
     # Include raw args/result JSON for receipts (bounded and deterministic).
     if step.args is not None:
         raw = _stable_json(step.args)
         capped, truncated = cap_text(raw, max_bytes=caps.max_preview_payload_bytes)
-        body += "\n**Args (JSON)**\n\n```json\n" + capped.rstrip("\n") + "\n```\n"
+        body += "\n**Evidence: Args (JSON)**\n\n```json\n" + capped.rstrip("\n") + "\n```\n"
         if truncated:
             body += "_Args truncated._\n"
 
     if step.result is not None:
         raw = _stable_json(step.result)
         capped, truncated = cap_text(raw, max_bytes=caps.max_preview_payload_bytes)
-        body += "\n**Result (JSON)**\n\n```json\n" + capped.rstrip("\n") + "\n```\n"
+        body += "\n**Evidence: Result (JSON)**\n\n```json\n" + capped.rstrip("\n") + "\n```\n"
         if truncated:
             body += "_Result truncated._\n"
 
@@ -132,7 +177,7 @@ def _format_step(*, step: ObservedStep, index: int, caps: Caps) -> str:
         )
         truncated = bool(step.preview.truncated or was_truncated)
 
-        body += "\n**Preview**\n\n"
+        body += "\n**Evidence: Preview**\n\n"
         body += "```text\n"
         body += preview_text.rstrip("\n")
         body += "\n```\n"
@@ -144,11 +189,10 @@ def _format_step(*, step: ObservedStep, index: int, caps: Caps) -> str:
 
 def compute_session_summary(*, steps: list[ObservedStep], casts_count: int) -> SessionSummary:
     tool_calls = sum(1 for s in steps if s.kind == "tool_call")
-    queries = sum(1 for s in steps if s.name == "query")
+    queries = sum(1 for s in steps if (s.tool_category == "query" or s.name == "query"))
     blocks = sum(1 for s in steps if s.kind == "blocker")
     errors = sum(1 for s in steps if s.status == "error")
-    # v0: treat MEDIUM risk steps as warnings (unknown/unclear SQL classification)
-    warnings = sum(1 for s in steps if (s.risk_level or "").upper() == "MEDIUM")
+    warnings = sum(len(s.warnings or []) for s in steps)
     return SessionSummary(
         tool_calls=tool_calls,
         queries=queries,

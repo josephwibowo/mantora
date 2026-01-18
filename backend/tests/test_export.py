@@ -104,6 +104,51 @@ def test_export_md_contains_timeline_headings_and_cast_evidence() -> None:
     assert f"`{origin_step.id}`" in text
 
 
+def test_cast_export_endpoints_work() -> None:
+    settings = Settings(storage=Storage(backend=StorageBackend.memory))
+    app = create_app(settings=settings)
+    client = TestClient(app)
+
+    store = app.state.store
+    session = store.create_session(title="demo")
+
+    origin_step = ObservedStep(
+        id=uuid4(),
+        session_id=session.id,
+        created_at=datetime(2026, 1, 1, 0, 0, tzinfo=UTC),
+        kind="tool_call",
+        name="query",
+        status="ok",
+        preview=TruncatedText(text="SELECT 1", truncated=False),
+    )
+    store.add_step(origin_step)
+
+    cast = TableCast(
+        id=uuid4(),
+        session_id=session.id,
+        created_at=datetime(2026, 1, 1, 0, 2, tzinfo=UTC),
+        title="Result table",
+        origin_step_id=origin_step.id,
+        origin_step_ids=[],
+        sql="SELECT 1",
+        rows=[{"x": 1}],
+        total_rows=1,
+        truncated=False,
+    )
+    store.add_cast(cast)
+
+    resp_md = client.get(f"/api/casts/{cast.id}/export.md")
+    assert resp_md.status_code == 200
+    assert f"# Cast: {cast.title}" in resp_md.text
+    assert "```sql" in resp_md.text
+
+    resp_json = client.get(f"/api/casts/{cast.id}/export.json")
+    assert resp_json.status_code == 200
+    data = json.loads(resp_json.text)
+    assert data["schema_version"] == "mantora.cast.v0"
+    assert data["cast"]["id"] == str(cast.id)
+
+
 def test_export_respects_max_preview_rows_cap() -> None:
     settings = Settings(
         storage=Storage(backend=StorageBackend.memory),
