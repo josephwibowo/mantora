@@ -126,6 +126,11 @@ def add_step(session_id: UUID, payload: AddStepRequest, request: Request) -> Add
     if store.get_session(session_id) is None:
         raise HTTPException(status_code=404, detail="session not found")
 
+    sql: TruncatedText | None = None
+    if payload.sql_text is not None:
+        capped, truncated = cap_text(payload.sql_text, max_bytes=8 * 1024)
+        sql = TruncatedText(text=capped, truncated=bool(payload.sql_truncated or truncated))
+
     preview: TruncatedText | None = None
     if payload.preview_text is not None:
         capped, truncated = cap_text(
@@ -145,6 +150,16 @@ def add_step(session_id: UUID, payload: AddStepRequest, request: Request) -> Add
         summary=payload.summary,
         risk_level=payload.risk_level,
         warnings=payload.warnings,
+        target_type=payload.target_type,
+        tool_category=payload.tool_category,
+        sql=sql,
+        sql_classification=payload.sql_classification,
+        policy_rule_ids=payload.policy_rule_ids,
+        decision=payload.decision,
+        result_rows_shown=payload.result_rows_shown,
+        result_rows_total=payload.result_rows_total,
+        captured_bytes=payload.captured_bytes,
+        error_message=payload.error_message,
         args=payload.args,
         result=payload.result,
         preview=preview,

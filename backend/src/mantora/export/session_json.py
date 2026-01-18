@@ -66,6 +66,15 @@ def _step_to_export(*, step: ObservedStep, caps: Caps) -> dict[str, Any]:
     args_json, args_truncated = _json_value_to_capped_json(value=step.args, caps=caps)
     result_json, result_truncated = _json_value_to_capped_json(value=step.result, caps=caps)
 
+    sql_text: str | None
+    sql_truncated: bool
+    if step.sql is None:
+        sql_text = None
+        sql_truncated = False
+    else:
+        sql_text, was_truncated = cap_text(step.sql.text, max_bytes=caps.max_preview_payload_bytes)
+        sql_truncated = bool(step.sql.truncated or was_truncated)
+
     preview_text: str | None
     preview_truncated: bool
     if step.preview is None:
@@ -85,6 +94,19 @@ def _step_to_export(*, step: ObservedStep, caps: Caps) -> dict[str, Any]:
         "name": step.name,
         "status": step.status,
         "duration_ms": step.duration_ms,
+        "risk_level": step.risk_level,
+        "warnings": step.warnings,
+        "target_type": step.target_type,
+        "tool_category": step.tool_category,
+        "sql_text": sql_text,
+        "sql_truncated": sql_truncated,
+        "sql_classification": step.sql_classification,
+        "policy_rule_ids": step.policy_rule_ids,
+        "decision": step.decision,
+        "result_rows_shown": step.result_rows_shown,
+        "result_rows_total": step.result_rows_total,
+        "captured_bytes": step.captured_bytes,
+        "error_message": step.error_message,
         "args_json": args_json,
         "args_truncated": args_truncated,
         "result_json": result_json,

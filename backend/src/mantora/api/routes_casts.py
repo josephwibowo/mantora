@@ -6,10 +6,11 @@ from typing import Any
 from typing import cast as typing_cast
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from mantora.casts.models import Cast, TableCast
+from mantora.export import export_cast_json, export_cast_md
 from mantora.store.interface import SessionStore
 
 router = APIRouter(prefix="/api")
@@ -87,3 +88,35 @@ def get_cast(cast_id: UUID, request: Request) -> CastResponse:
     if c is None:
         raise HTTPException(status_code=404, detail="cast not found")
     return _cast_to_response(c)
+
+
+@router.get("/casts/{cast_id}/export.md")
+def get_cast_export_md(cast_id: UUID, request: Request) -> Response:
+    store = _get_store(request)
+    settings = request.app.state.settings
+
+    if store.get_cast(cast_id) is None:
+        raise HTTPException(status_code=404, detail="cast not found")
+
+    content = export_cast_md(store=store, cast_id=cast_id, caps=settings.caps)
+    return Response(
+        content=content,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="cast-{cast_id}.md"'},
+    )
+
+
+@router.get("/casts/{cast_id}/export.json")
+def get_cast_export_json(cast_id: UUID, request: Request) -> Response:
+    store = _get_store(request)
+    settings = request.app.state.settings
+
+    if store.get_cast(cast_id) is None:
+        raise HTTPException(status_code=404, detail="cast not found")
+
+    content = export_cast_json(store=store, cast_id=cast_id, caps=settings.caps)
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="cast-{cast_id}.json"'},
+    )

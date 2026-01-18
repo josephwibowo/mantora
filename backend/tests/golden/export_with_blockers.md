@@ -24,6 +24,9 @@
 - Risk: `CRITICAL`
 - Summary: Blocked: Destructive SQL is not allowed in protective mode
 
+**Receipt v1**
+
+- SQL classification: `destructive`
 - Pending request: `00000000-0000-0000-0000-000000000099`
 - Reason: Destructive SQL is not allowed in protective mode
 
@@ -33,7 +36,7 @@
 DROP TABLE users
 ```
 
-**Args (JSON)**
+**Evidence: Args (JSON)**
 
 ```json
 {
@@ -54,8 +57,11 @@ DROP TABLE users
 - Risk: `CRITICAL`
 - Summary: Denied blocked query request
 
-- Pending request: `00000000-0000-0000-0000-000000000099`
+**Receipt v1**
+
+- SQL classification: `destructive`
 - Decision: `denied`
+- Pending request: `00000000-0000-0000-0000-000000000099`
 - Reason: Destructive SQL is not allowed in protective mode
 
 **SQL**
@@ -64,7 +70,7 @@ DROP TABLE users
 DROP TABLE users
 ```
 
-**Args (JSON)**
+**Evidence: Args (JSON)**
 
 ```json
 {
@@ -84,7 +90,7 @@ DROP TABLE users
 - Kind: `note`
 - Status: `ok`
 
-**Args (JSON)**
+**Evidence: Args (JSON)**
 
 ```json
 {
@@ -92,7 +98,7 @@ DROP TABLE users
 }
 ```
 
-**Result (JSON)**
+**Evidence: Result (JSON)**
 
 ```json
 {
