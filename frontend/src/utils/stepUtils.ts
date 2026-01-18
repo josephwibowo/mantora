@@ -1,4 +1,75 @@
-import { ObservedStep } from '../api/types';
+import type { ObservedStep, StepCategory, StepDecision } from '../api/types';
+
+export type StepStatusLabel = 'OK' | 'ERROR' | 'BLOCKED' | 'ALLOWED' | 'DENIED' | 'TIMEOUT';
+export type StepPhase = 'exploration' | 'analysis' | 'mutation' | 'cast' | 'other';
+
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+export function getStepArgs(step: ObservedStep): UnknownRecord | null {
+  return isRecord(step.args) ? step.args : null;
+}
+
+export function getStepDecision(step: ObservedStep): StepDecision | null {
+  if (step.decision) return step.decision;
+  const args = getStepArgs(step);
+  const value = args?.decision;
+  if (value === 'pending' || value === 'allowed' || value === 'denied' || value === 'timeout')
+    return value;
+  return null;
+}
+
+export function getStepStatusLabel(step: ObservedStep): StepStatusLabel {
+  if (step.kind === 'blocker' || step.kind === 'blocker_decision') {
+    const decision = getStepDecision(step);
+    if (!decision || decision === 'pending') return 'BLOCKED';
+    if (decision === 'allowed') return 'ALLOWED';
+    if (decision === 'timeout') return 'TIMEOUT';
+    return 'DENIED';
+  }
+  return step.status === 'error' ? 'ERROR' : 'OK';
+}
+
+export function getStepCategory(step: ObservedStep): StepCategory {
+  if (step.tool_category) return step.tool_category;
+  if (step.name.startsWith('cast_') || step.name === 'cast_table') return 'cast';
+  if (step.name === 'query' || step.name === 'execute') return 'query';
+  return 'unknown';
+}
+
+export function extractSqlExcerpt(step: ObservedStep): string | null {
+  if (step.sql?.text) return step.sql.text;
+  const args = getStepArgs(step);
+  const sql = args?.sql;
+  return typeof sql === 'string' ? sql : null;
+}
+
+export function extractTableTouched(step: ObservedStep): string | null {
+  const sql = extractSqlExcerpt(step);
+  if (!sql) return null;
+  const match = sql.match(/\\bFROM\\s+([a-zA-Z0-9_\\.]+)/i);
+  return match?.[1] ?? null;
+}
+
+export function getStepPhase(step: ObservedStep): StepPhase {
+  const category = getStepCategory(step);
+  if (category === 'cast') return 'cast';
+  if (category === 'schema' || category === 'list') return 'exploration';
+  if (category === 'query') {
+    const warnings = step.warnings ?? [];
+    const isMutationish =
+      (step.risk_level ?? '').toUpperCase() === 'CRITICAL' ||
+      warnings.includes('DDL') ||
+      warnings.includes('DML') ||
+      getStepStatusLabel(step) !== 'OK';
+    return isMutationish ? 'mutation' : 'analysis';
+  }
+  if (getStepStatusLabel(step) !== 'OK') return 'mutation';
+  return 'other';
+}
 
 export function findDatabaseErrorInValue(value: unknown): string | null {
   if (typeof value === 'string') return findDatabaseErrorInText(value);
@@ -41,6 +112,7 @@ export function findDatabaseErrorInText(text: string): string | null {
 }
 
 export function extractDatabaseErrorMessage(step: ObservedStep): string | null {
+  if (step.error_message) return step.error_message;
   if (step.status !== 'error') return null;
   const raw = findDatabaseErrorInValue(step.result);
   if (!raw) return null;
@@ -48,55 +120,54 @@ export function extractDatabaseErrorMessage(step: ObservedStep): string | null {
 }
 
 export function computeStepNarrative(step: ObservedStep): string {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const args = step.args as any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = step.result as any;
+  const args = getStepArgs(step);
+  const result = isRecord(step.result) ? step.result : null;
+  const status = getStepStatusLabel(step);
 
-  if (step.kind === 'blocker') {
-    const decision = args?.decision;
-    const reason = args?.reason || step.summary || 'Action Blocked';
+  if (step.kind === 'blocker' || step.kind === 'blocker_decision') {
+    const reason =
+      (typeof args?.reason === 'string' ? args.reason : null) || step.summary || 'Action';
 
     // If decision is present, show the final state
-    if (decision === 'allowed') return `Allowed: ${reason}`;
-    if (decision === 'denied') return `Denied: ${reason}`;
-    if (decision === 'timeout') return `Timed out: ${reason}`;
-
-    // Otherwise, still pending
+    if (status === 'ALLOWED') return `Allowed: ${reason}`;
+    if (status === 'DENIED') return `Denied: ${reason}`;
+    if (status === 'TIMEOUT') return `Timed out: ${reason}`;
     return `Blocked: ${reason}`;
   }
 
   const dbErrorMessage = extractDatabaseErrorMessage(step);
-  if (step.status === 'error') {
+  if (status === 'ERROR') {
     const duration = step.duration_ms ? `${step.duration_ms}ms` : '';
     const base = step.name === 'query' ? 'Query failed' : `${step.name} failed`;
     const suffix = dbErrorMessage ? ` — ${dbErrorMessage}` : '';
     return `${base}${duration ? ` (${duration})` : ''}${suffix}`;
   }
 
-  if (step.name === 'query') {
+  if (getStepCategory(step) === 'query') {
     // Try to find table name in SQL (heuristic) or just use logic
-    const sql = args?.sql || '';
-    const tableName = sql.match(/FROM\s+([a-zA-Z0-9_]+)/i)?.[1] || 'query';
+    const tableName = extractTableTouched(step) || 'query';
 
     let meta = '';
-    if (result && Array.isArray(result)) {
-      meta = `${result.length} rows`;
-    } else if (result?.rows_shown !== undefined) {
-      // Handle cast_table result format if query result mimics it or if result is cap object
-      meta = `${result.total_rows ?? 'unknown'} rows`;
-    } else if (step.preview?.text) {
-      // Fallback to estimating from preview if result is opaque
-      meta = 'result ready';
-    }
+    if (typeof step.result_rows_total === 'number') meta = `${step.result_rows_total} rows`;
+    else if (typeof step.result_rows_shown === 'number') meta = `${step.result_rows_shown} rows`;
+    else if (step.preview?.text) meta = 'result ready';
 
     const duration = step.duration_ms ? `${step.duration_ms}ms` : '';
     return `Query: ${tableName} (${[meta, duration].filter(Boolean).join('; ')})`;
   }
 
-  if (step.name === 'cast_table') {
-    const title = args?.title || 'Table';
-    const rows = result?.total_rows ?? result?.rows_shown ?? 'unknown';
+  if (getStepCategory(step) === 'cast') {
+    const title = typeof args?.title === 'string' ? args.title : 'Table';
+    const rows =
+      typeof step.result_rows_total === 'number'
+        ? step.result_rows_total
+        : typeof step.result_rows_shown === 'number'
+          ? step.result_rows_shown
+          : typeof result?.total_rows === 'number'
+            ? result.total_rows
+            : typeof result?.rows_shown === 'number'
+              ? result.rows_shown
+              : 'unknown';
     return `Cast table: ${title} (${rows} rows)`;
   }
 
