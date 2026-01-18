@@ -23,6 +23,8 @@ class Session(BaseModel):
 
 
 ObservedStepKind = Literal["tool_call", "tool_result", "note", "blocker", "blocker_decision"]
+StepCategory = Literal["query", "schema", "list", "cast", "unknown"]
+StepDecision = Literal["pending", "allowed", "denied", "timeout"]
 
 
 class ObservedStep(BaseModel):
@@ -44,6 +46,24 @@ class ObservedStep(BaseModel):
     risk_level: str | None = None
     # Optional list of warning labels (e.g., ["NO_LIMIT", "SELECT_STAR"])
     warnings: list[str] | None = None
+
+    # Receipt/trace v1 normalized fields (all optional for backwards compatibility).
+    target_type: str | None = None
+    tool_category: StepCategory | None = None
+
+    # SQL excerpt as captured by Mantora (capped). Only set when extractable.
+    sql: TruncatedText | None = None
+    sql_classification: str | None = None
+
+    policy_rule_ids: list[str] | None = None
+    decision: StepDecision | None = None
+
+    result_rows_shown: int | None = None
+    result_rows_total: int | None = None
+    captured_bytes: int | None = None
+
+    # Normalized DB error message (capped). Useful when the raw result is opaque.
+    error_message: str | None = None
 
     args: JsonValue | None = None
     result: JsonValue | None = None
@@ -69,6 +89,22 @@ class AddStepRequest(BaseModel):
     summary: str | None = Field(default=None, max_length=500)
     risk_level: str | None = Field(default=None, max_length=50)
     warnings: list[str] | None = Field(default=None)
+
+    target_type: str | None = Field(default=None, max_length=50)
+    tool_category: StepCategory | None = None
+
+    sql_text: str | None = None
+    sql_truncated: bool = False
+    sql_classification: str | None = Field(default=None, max_length=50)
+
+    policy_rule_ids: list[str] | None = None
+    decision: StepDecision | None = None
+
+    result_rows_shown: int | None = Field(default=None, ge=0)
+    result_rows_total: int | None = Field(default=None, ge=0)
+    captured_bytes: int | None = Field(default=None, ge=0)
+
+    error_message: str | None = Field(default=None, max_length=2000)
 
     args: JsonValue | None = None
     result: JsonValue | None = None

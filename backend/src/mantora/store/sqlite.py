@@ -86,6 +86,18 @@ class SQLiteSessionStore(SessionStore):
                     duration_ms INTEGER,
                     summary_text TEXT,
                     risk_level TEXT,
+                    warnings_json TEXT,
+                    target_type TEXT,
+                    tool_category TEXT,
+                    sql_text TEXT,
+                    sql_truncated INTEGER,
+                    sql_classification TEXT,
+                    policy_rule_ids_json TEXT,
+                    decision TEXT,
+                    result_rows_shown INTEGER,
+                    result_rows_total INTEGER,
+                    captured_bytes INTEGER,
+                    error_message TEXT,
                     args_json TEXT,
                     result_json TEXT,
                     preview_text TEXT,
@@ -164,6 +176,30 @@ class SQLiteSessionStore(SessionStore):
                 self._conn.execute("ALTER TABLE steps ADD COLUMN summary_text TEXT")
             if "risk_level" not in step_cols:
                 self._conn.execute("ALTER TABLE steps ADD COLUMN risk_level TEXT")
+            if "warnings_json" not in step_cols:
+                self._conn.execute("ALTER TABLE steps ADD COLUMN warnings_json TEXT")
+            if "target_type" not in step_cols:
+                self._conn.execute("ALTER TABLE steps ADD COLUMN target_type TEXT")
+            if "tool_category" not in step_cols:
+                self._conn.execute("ALTER TABLE steps ADD COLUMN tool_category TEXT")
+            if "sql_text" not in step_cols:
+                self._conn.execute("ALTER TABLE steps ADD COLUMN sql_text TEXT")
+            if "sql_truncated" not in step_cols:
+                self._conn.execute("ALTER TABLE steps ADD COLUMN sql_truncated INTEGER")
+            if "sql_classification" not in step_cols:
+                self._conn.execute("ALTER TABLE steps ADD COLUMN sql_classification TEXT")
+            if "policy_rule_ids_json" not in step_cols:
+                self._conn.execute("ALTER TABLE steps ADD COLUMN policy_rule_ids_json TEXT")
+            if "decision" not in step_cols:
+                self._conn.execute("ALTER TABLE steps ADD COLUMN decision TEXT")
+            if "result_rows_shown" not in step_cols:
+                self._conn.execute("ALTER TABLE steps ADD COLUMN result_rows_shown INTEGER")
+            if "result_rows_total" not in step_cols:
+                self._conn.execute("ALTER TABLE steps ADD COLUMN result_rows_total INTEGER")
+            if "captured_bytes" not in step_cols:
+                self._conn.execute("ALTER TABLE steps ADD COLUMN captured_bytes INTEGER")
+            if "error_message" not in step_cols:
+                self._conn.execute("ALTER TABLE steps ADD COLUMN error_message TEXT")
         self._checkpoint()
 
     def _checkpoint(self) -> None:
@@ -322,10 +358,27 @@ class SQLiteSessionStore(SessionStore):
         return True
 
     def add_step(self, step: ObservedStep) -> None:
+        warnings_json = (
+            json.dumps(step.warnings, separators=(",", ":")) if step.warnings is not None else None
+        )
+        policy_rule_ids_json = (
+            json.dumps(step.policy_rule_ids, separators=(",", ":"))
+            if step.policy_rule_ids is not None
+            else None
+        )
         args_json = json.dumps(step.args, separators=(",", ":")) if step.args is not None else None
         result_json = (
             json.dumps(step.result, separators=(",", ":")) if step.result is not None else None
         )
+
+        sql_text: str | None
+        sql_truncated: int | None
+        if step.sql is None:
+            sql_text = None
+            sql_truncated = None
+        else:
+            sql_text = step.sql.text
+            sql_truncated = 1 if step.sql.truncated else 0
 
         preview_text: str | None
         preview_truncated: int | None
@@ -356,12 +409,24 @@ class SQLiteSessionStore(SessionStore):
                     duration_ms,
                     summary_text,
                     risk_level,
+                    warnings_json,
+                    target_type,
+                    tool_category,
+                    sql_text,
+                    sql_truncated,
+                    sql_classification,
+                    policy_rule_ids_json,
+                    decision,
+                    result_rows_shown,
+                    result_rows_total,
+                    captured_bytes,
+                    error_message,
                     args_json,
                     result_json,
                     preview_text,
                     preview_truncated
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """.strip(),
                 (
                     str(step.id),
@@ -373,6 +438,18 @@ class SQLiteSessionStore(SessionStore):
                     step.duration_ms,
                     step.summary,
                     step.risk_level,
+                    warnings_json,
+                    step.target_type,
+                    step.tool_category,
+                    sql_text,
+                    sql_truncated,
+                    step.sql_classification,
+                    policy_rule_ids_json,
+                    step.decision,
+                    step.result_rows_shown,
+                    step.result_rows_total,
+                    step.captured_bytes,
+                    step.error_message,
                     args_json,
                     result_json,
                     preview_text,
@@ -420,13 +497,17 @@ class SQLiteSessionStore(SessionStore):
             new_status = status if status is not None else row["status"]
             new_args_json = json.dumps(current_args, separators=(",", ":"))
 
+            decision: str | None = None
+            if args and "decision" in args and isinstance(args["decision"], str):
+                decision = args["decision"]
+
             self._conn.execute(
                 """
                 UPDATE steps
-                SET summary_text = ?, status = ?, args_json = ?
+                SET summary_text = ?, status = ?, args_json = ?, decision = COALESCE(?, decision)
                 WHERE id = ?
                 """,
-                (new_summary, new_status, new_args_json, str(step_id)),
+                (new_summary, new_status, new_args_json, decision, str(step_id)),
             )
 
         self._checkpoint()
@@ -439,8 +520,12 @@ class SQLiteSessionStore(SessionStore):
                     """
                     SELECT
                         id, session_id, created_at, kind, name, status,
-                        duration_ms, summary_text, risk_level, args_json,
-                        result_json, preview_text, preview_truncated
+                        duration_ms, summary_text, risk_level, warnings_json,
+                        target_type, tool_category,
+                        sql_text, sql_truncated, sql_classification,
+                        policy_rule_ids_json, decision,
+                        result_rows_shown, result_rows_total, captured_bytes, error_message,
+                        args_json, result_json, preview_text, preview_truncated
                     FROM steps
                     WHERE id = ?
                     """,
@@ -450,6 +535,22 @@ class SQLiteSessionStore(SessionStore):
             if row:
                 args_parsed = json.loads(row["args_json"]) if row["args_json"] else None
                 result_parsed = json.loads(row["result_json"]) if row["result_json"] else None
+
+                warnings = (
+                    json.loads(row["warnings_json"]) if row["warnings_json"] is not None else None
+                )
+                policy_rule_ids = (
+                    json.loads(row["policy_rule_ids_json"])
+                    if row["policy_rule_ids_json"] is not None
+                    else None
+                )
+
+                sql: TruncatedText | None = None
+                if row["sql_text"] is not None:
+                    sql = TruncatedText(
+                        text=row["sql_text"],
+                        truncated=bool(row["sql_truncated"]),
+                    )
 
                 preview: TruncatedText | None = None
                 if row["preview_text"] is not None:
@@ -468,6 +569,17 @@ class SQLiteSessionStore(SessionStore):
                     duration_ms=row["duration_ms"],
                     summary=row["summary_text"],
                     risk_level=row["risk_level"],
+                    warnings=warnings,
+                    target_type=row["target_type"],
+                    tool_category=row["tool_category"],
+                    sql=sql,
+                    sql_classification=row["sql_classification"],
+                    policy_rule_ids=policy_rule_ids,
+                    decision=row["decision"],
+                    result_rows_shown=row["result_rows_shown"],
+                    result_rows_total=row["result_rows_total"],
+                    captured_bytes=row["captured_bytes"],
+                    error_message=row["error_message"],
                     args=args_parsed,
                     result=result_parsed,
                     preview=preview,
@@ -501,6 +613,18 @@ class SQLiteSessionStore(SessionStore):
                         duration_ms,
                         summary_text,
                         risk_level,
+                        warnings_json,
+                        target_type,
+                        tool_category,
+                        sql_text,
+                        sql_truncated,
+                        sql_classification,
+                        policy_rule_ids_json,
+                        decision,
+                        result_rows_shown,
+                        result_rows_total,
+                        captured_bytes,
+                        error_message,
                         args_json,
                         result_json,
                         preview_text,
@@ -516,6 +640,22 @@ class SQLiteSessionStore(SessionStore):
             for row in rows:
                 args = json.loads(row["args_json"]) if row["args_json"] is not None else None
                 result = json.loads(row["result_json"]) if row["result_json"] is not None else None
+
+                warnings = (
+                    json.loads(row["warnings_json"]) if row["warnings_json"] is not None else None
+                )
+                policy_rule_ids = (
+                    json.loads(row["policy_rule_ids_json"])
+                    if row["policy_rule_ids_json"] is not None
+                    else None
+                )
+
+                sql: TruncatedText | None = None
+                if row["sql_text"] is not None:
+                    sql = TruncatedText(
+                        text=row["sql_text"],
+                        truncated=bool(row["sql_truncated"]),
+                    )
 
                 preview: TruncatedText | None
                 if row["preview_text"] is None:
@@ -537,6 +677,17 @@ class SQLiteSessionStore(SessionStore):
                         duration_ms=row["duration_ms"],
                         summary=row["summary_text"],
                         risk_level=row["risk_level"],
+                        warnings=warnings,
+                        target_type=row["target_type"],
+                        tool_category=row["tool_category"],
+                        sql=sql,
+                        sql_classification=row["sql_classification"],
+                        policy_rule_ids=policy_rule_ids,
+                        decision=row["decision"],
+                        result_rows_shown=row["result_rows_shown"],
+                        result_rows_total=row["result_rows_total"],
+                        captured_bytes=row["captured_bytes"],
+                        error_message=row["error_message"],
                         args=args,
                         result=result,
                         preview=preview,
