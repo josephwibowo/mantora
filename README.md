@@ -2,15 +2,20 @@
 
 The Firewall for AI Agents. Prevent DROP TABLE and get a receipt for every SQL query your LLM runs.
 
-Claude Code / Cursor → Mantora (UI + MCP wrapper) → DuckDB/Postgres MCP server
+Claude Code / Cursor → Mantora (UI + MCP wrapper) → target MCP server (DuckDB/Postgres/etc.)
 
 ![Mantora Demo](docs/assets/demo.gif)
 
 ## How it works
-Mantora sits between your LLM client (Claude/Cursor) and the target MCP server (DuckDB/Postgres). It intercepts JSON-RPC messages to log traffic and enforce safety policies.
+Mantora sits between your LLM client (Claude/Cursor) and the target MCP server. It intercepts JSON-RPC messages to log traffic and enforce safety policies.
 
 *   **Mode A (Recommended UX):** `mantora mcp --connector duckdb --db ...` runs DuckDB directly (Mantora spawns the official server process).
 *   **Mode B (Proxy mode):** Mantora *wraps* a separately spawned MCP server process (configured via `config.toml` target command).
+
+Connectors/adapters are target-specific (DuckDB, Postgres, Snowflake, BigQuery, Databricks) and are used for:
+- tool categorization (`query|schema|list|cast|unknown`)
+- SQL extraction for receipts/trace
+- conservative unknown-tool handling in protective mode
 
 
 ## Quickstart (DuckDB local, zero credentials)
@@ -159,6 +164,7 @@ Protective Mode is ON by default. In protective mode, Mantora blocks (or require
 - DML (INSERT/UPDATE/DELETE)
 - multi-statement SQL
 - DELETE without WHERE
+- unknown tools (explicit approval required)
 
 ## Troubleshooting
 
@@ -187,6 +193,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details on:
 Mantora stores a complete record of your sessions, including:
 *   **Session Metadata**: Titles and timestamps.
 *   **Full Execution Trace**: Tool call arguments and **result previews (capped)** by default (configurable rows/bytes).
+*   **Receipt fields**: coarse target type + tool category + SQL classification/warnings + policy rule ids + decision state.
 *   **Artifacts**: Any tables, charts, or notes generated during the session.
 *   **Decisions**: A record of any "allow/deny" decisions made on blocked actions.
 

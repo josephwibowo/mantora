@@ -24,10 +24,18 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
+import BlockIcon from '@mui/icons-material/Block';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { ChangeEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useCreateSession, useDeleteSession, useSessions } from '../api/queries';
+import {
+  useCreateSession,
+  useDeleteSession,
+  useSessions,
+  useSessionsSummaries,
+} from '../api/queries';
 import { AppHeader } from '../components/Layout/AppHeader';
 import type { Session } from '../api/types';
 
@@ -99,6 +107,7 @@ export function SessionsPage() {
   const filteredSessions = (sessions ?? []).filter(
     (s) => !filter || s.title?.toLowerCase().includes(filter.toLowerCase()),
   );
+  const sessionSummaries = useSessionsSummaries(filteredSessions.map((s) => s.id));
 
   return (
     <Box
@@ -268,7 +277,22 @@ export function SessionsPage() {
                     }}
                   >
                     <TableCell align='center'>
-                      <CheckCircleIcon sx={{ color: 'success.main', fontSize: 18 }} />
+                      {(() => {
+                        const summary = sessionSummaries.data?.[s.id];
+                        if (!summary) {
+                          return <CheckCircleIcon sx={{ color: 'text.disabled', fontSize: 18 }} />;
+                        }
+                        if (summary.errors > 0) {
+                          return <ErrorIcon sx={{ color: 'error.main', fontSize: 18 }} />;
+                        }
+                        if (summary.blocks > 0) {
+                          return <BlockIcon sx={{ color: 'warning.main', fontSize: 18 }} />;
+                        }
+                        if (summary.warnings > 0) {
+                          return <WarningAmberIcon sx={{ color: 'warning.main', fontSize: 18 }} />;
+                        }
+                        return <CheckCircleIcon sx={{ color: 'success.main', fontSize: 18 }} />;
+                      })()}
                     </TableCell>
                     <TableCell>
                       <Typography variant='body2' fontWeight={600}>

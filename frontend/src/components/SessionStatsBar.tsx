@@ -1,21 +1,30 @@
 import { Box, Divider, Typography, useTheme } from '@mui/material';
+import type { SvgIconComponent } from '@mui/icons-material';
 import BuildIcon from '@mui/icons-material/Build';
 import StorageIcon from '@mui/icons-material/Storage';
 import ViewQuiltIcon from '@mui/icons-material/ViewQuilt';
 import BlockIcon from '@mui/icons-material/Block';
 import ErrorIcon from '@mui/icons-material/Error';
 import WarningIcon from '@mui/icons-material/Warning';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import TableChartIcon from '@mui/icons-material/TableChart';
 import type { SessionSummary } from '../api/types';
 
 interface SessionStatsBarProps {
   summary: SessionSummary;
 }
 
+interface StatProps {
+  icon: SvgIconComponent;
+  label: string;
+  value: number;
+  color?: string;
+}
+
 export function SessionStatsBar({ summary }: SessionStatsBarProps) {
   const theme = useTheme();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const Stat = ({ icon: Icon, label, value, color }: any) => {
+  const Stat = ({ icon: Icon, label, value, color }: StatProps) => {
     if (value === 0 && (label === 'Errors' || label === 'Blocks' || label === 'Warnings'))
       return null;
 
@@ -43,6 +52,8 @@ export function SessionStatsBar({ summary }: SessionStatsBarProps) {
     );
   };
 
+  const tableCount = summary.touched_tables?.length ?? 0;
+
   return (
     <Box
       sx={{
@@ -63,8 +74,27 @@ export function SessionStatsBar({ summary }: SessionStatsBarProps) {
       <Divider orientation='vertical' flexItem sx={{ height: 12, my: 'auto' }} />
       <Stat icon={ViewQuiltIcon} label='Casts' value={summary.casts} />
 
-      {(summary.blocks > 0 || summary.errors > 0 || summary.warnings > 0) && (
+      {tableCount > 0 && (
+        <>
+          <Divider orientation='vertical' flexItem sx={{ height: 12, my: 'auto' }} />
+          <Stat icon={TableChartIcon} label='Tables' value={tableCount} />
+        </>
+      )}
+
+      {(summary.blocks > 0 ||
+        summary.errors > 0 ||
+        summary.warnings > 0 ||
+        (summary.approvals ?? 0) > 0) && (
         <Divider orientation='vertical' flexItem sx={{ height: 12, my: 'auto' }} />
+      )}
+
+      {summary.approvals !== undefined && summary.approvals > 0 && (
+        <Stat
+          icon={CheckCircleOutlineIcon}
+          label='Approvals'
+          value={summary.approvals}
+          color={theme.palette.success.main}
+        />
       )}
 
       <Stat

@@ -3,9 +3,10 @@ import { ReactNode } from 'react';
 
 interface RightPanelProps {
   children: ReactNode;
+  controls?: ReactNode;
 }
 
-export function RightPanel({ children }: RightPanelProps) {
+export function RightPanel({ children, controls }: RightPanelProps) {
   return (
     <Box
       sx={{
@@ -21,6 +22,7 @@ export function RightPanel({ children }: RightPanelProps) {
         <Typography variant='overline' color='text.primary' fontWeight={700}>
           TIMELINE
         </Typography>
+        {controls && <Box sx={{ mt: 1 }}>{controls}</Box>}
       </Box>
       <Box sx={{ flexGrow: 1, overflow: 'auto' }}>{children}</Box>
     </Box>

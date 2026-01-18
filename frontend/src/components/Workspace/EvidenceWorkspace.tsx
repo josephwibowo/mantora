@@ -1,5 +1,6 @@
 import { Alert, Box, Button, Divider, Stack, Typography } from '@mui/material';
 import BlockIcon from '@mui/icons-material/Block';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
@@ -10,7 +11,13 @@ import { JsonViewer } from '../JsonViewer';
 
 import type { Cast, ObservedStep, PendingRequest } from '../../api/types';
 import { CastRenderer } from '../CastRenderer';
-import { isBlockerDecisionArgs } from '../../utils/guards';
+import {
+  computeStepNarrative,
+  extractDatabaseErrorMessage,
+  extractSqlExcerpt,
+  getStepDecision,
+  getStepStatusLabel,
+} from '../../utils/stepUtils';
 
 interface EvidenceWorkspaceProps {
   step?: ObservedStep;
@@ -61,6 +68,24 @@ export function EvidenceWorkspace({
     navigator.clipboard.writeText(JSON.stringify(evidence, null, 2));
   };
 
+  const statusLabel = getStepStatusLabel(step);
+  const decision = getStepDecision(step);
+  const narrative = computeStepNarrative(step);
+  const sqlExcerpt = extractSqlExcerpt(step);
+  const errorMessage = extractDatabaseErrorMessage(step);
+
+  const statusColor =
+    statusLabel === 'OK' || statusLabel === 'ALLOWED'
+      ? 'success.main'
+      : statusLabel === 'ERROR' || statusLabel === 'DENIED'
+        ? 'error.main'
+        : 'warning.main';
+
+  const copySql = () => {
+    if (!sqlExcerpt) return;
+    navigator.clipboard.writeText(sqlExcerpt);
+  };
+
   return (
     <Box
       sx={{
@@ -108,11 +133,11 @@ export function EvidenceWorkspace({
               variant='inherit'
               component='span'
               sx={{
-                color: step.status === 'error' ? 'error.main' : 'success.main',
+                color: statusColor,
                 fontWeight: 600,
               }}
             >
-              {step.status === 'error' ? 'ERROR' : 'OK'}
+              {statusLabel}
             </Typography>
 
             <span>•</span>
@@ -145,10 +170,7 @@ export function EvidenceWorkspace({
 
           {/* Main Narrative Title */}
           <Typography variant='h6' fontWeight={600} sx={{ lineHeight: 1.3 }}>
-            {/* Use simple heuristics or just step.name/summary if available. 
-                             Using summary if present is best, else name. 
-                         */}
-            {step.summary || (step.kind === 'tool_call' ? `Executed ${step.name}` : step.kind)}
+            {step.summary || narrative}
           </Typography>
         </Stack>
       </Box>
@@ -157,12 +179,31 @@ export function EvidenceWorkspace({
       <Box sx={{ flexGrow: 1, overflow: 'auto', p: 3 }}>
         <Stack spacing={4}>
           {/* Blocker Action Area */}
-          {/* Blocker Action Area */}
-          {(step.kind === 'blocker' || pendingRequest) && (
+          {(step.kind === 'blocker' || step.kind === 'blocker_decision' || pendingRequest) && (
             <StatusBanner
-              variant='warning'
-              icon={<WarningAmberIcon />}
-              title='Action Blocked'
+              variant={
+                statusLabel === 'ALLOWED'
+                  ? 'success'
+                  : statusLabel === 'DENIED'
+                    ? 'error'
+                    : 'warning'
+              }
+              icon={
+                statusLabel === 'ALLOWED' ? (
+                  <CheckCircleIcon />
+                ) : statusLabel === 'DENIED' ? (
+                  <BlockIcon />
+                ) : (
+                  <WarningAmberIcon />
+                )
+              }
+              title={
+                statusLabel === 'ALLOWED'
+                  ? 'Action Allowed'
+                  : statusLabel === 'DENIED'
+                    ? 'Action Denied'
+                    : 'Action Blocked'
+              }
               description={
                 pendingRequest?.reason || step.summary || 'This action requires approval.'
               }
@@ -211,35 +252,201 @@ export function EvidenceWorkspace({
                   Decision: {pendingRequest.status.toUpperCase()}
                 </Alert>
               )}
+              {!pendingRequest && decision && (
+                <Alert
+                  severity={
+                    decision === 'allowed' ? 'success' : decision === 'denied' ? 'error' : 'warning'
+                  }
+                  sx={{
+                    bgcolor: 'background.paper',
+                    border: 1,
+                    borderColor: 'divider',
+                  }}
+                >
+                  Decision: {decision.toUpperCase()}
+                </Alert>
+              )}
             </StatusBanner>
           )}
-
-          {/* Denied Decision Banner */}
-          {step.kind === 'blocker_decision' &&
-            isBlockerDecisionArgs(step.args) &&
-            step.args.decision === 'denied' && (
-              <StatusBanner
-                variant='error'
-                icon={<BlockIcon />}
-                title='Action Denied'
-                description={step.args.reason || 'This action was denied.'}
-              />
-            )}
 
           {/* CAST (Visual Artifact) */}
           {cast && (
             <Box>
-              <Typography
-                variant='overline'
-                color='text.secondary'
-                fontWeight={700}
-                sx={{ mb: 1, display: 'block' }}
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  mb: 1,
+                }}
               >
-                ARTIFACT
-              </Typography>
+                <Typography variant='overline' color='text.secondary' fontWeight={700}>
+                  ARTIFACT
+                </Typography>
+                <Button
+                  size='small'
+                  variant='outlined'
+                  onClick={() => {
+                    window.location.href = `/api/casts/${cast.id}/export.md`;
+                  }}
+                  sx={{ textTransform: 'none', borderColor: 'divider', color: 'text.secondary' }}
+                >
+                  Export Artifact Receipt
+                </Button>
+              </Box>
               <CastRenderer cast={cast} />
             </Box>
           )}
+
+          {/* TRACE (Request / Policy / Response) */}
+          <Box>
+            <Typography
+              variant='overline'
+              color='text.secondary'
+              fontWeight={700}
+              sx={{ mb: 1, display: 'block' }}
+            >
+              TRACE
+            </Typography>
+            <Stack spacing={2}>
+              <Box
+                sx={{
+                  p: 2,
+                  bgcolor: 'background.paper',
+                  border: 1,
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                }}
+              >
+                <Typography
+                  variant='caption'
+                  fontWeight={700}
+                  color='text.secondary'
+                  fontFamily='monospace'
+                >
+                  REQUEST
+                </Typography>
+                <Stack spacing={0.5} sx={{ mt: 1, fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                  {step.target_type && (
+                    <Typography variant='inherit'>target: {step.target_type}</Typography>
+                  )}
+                  {step.tool_category && (
+                    <Typography variant='inherit'>category: {step.tool_category}</Typography>
+                  )}
+                  <Typography variant='inherit'>tool: {step.name}</Typography>
+                  {sqlExcerpt && (
+                    <Box>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <Typography variant='inherit'>sql:</Typography>
+                        <Button
+                          size='small'
+                          startIcon={<ContentCopyIcon />}
+                          onClick={copySql}
+                          sx={{ textTransform: 'none', color: 'text.secondary' }}
+                        >
+                          Copy
+                        </Button>
+                      </Box>
+                      <Box
+                        sx={{
+                          mt: 1,
+                          p: 1,
+                          bgcolor: 'background.default',
+                          border: 1,
+                          borderColor: 'divider',
+                          borderRadius: 1,
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          maxHeight: 200,
+                          overflow: 'auto',
+                        }}
+                      >
+                        {sqlExcerpt}
+                      </Box>
+                    </Box>
+                  )}
+                </Stack>
+              </Box>
+
+              <Box
+                sx={{
+                  p: 2,
+                  bgcolor: 'background.paper',
+                  border: 1,
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                }}
+              >
+                <Typography
+                  variant='caption'
+                  fontWeight={700}
+                  color='text.secondary'
+                  fontFamily='monospace'
+                >
+                  POLICY
+                </Typography>
+                <Stack spacing={0.5} sx={{ mt: 1, fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                  {step.sql_classification && (
+                    <Typography variant='inherit'>
+                      classification: {step.sql_classification}
+                    </Typography>
+                  )}
+                  {step.risk_level && (
+                    <Typography variant='inherit'>risk: {step.risk_level}</Typography>
+                  )}
+                  {step.warnings && step.warnings.length > 0 && (
+                    <Typography variant='inherit'>warnings: {step.warnings.join(', ')}</Typography>
+                  )}
+                  {step.policy_rule_ids && step.policy_rule_ids.length > 0 && (
+                    <Typography variant='inherit'>
+                      rules: {step.policy_rule_ids.join(', ')}
+                    </Typography>
+                  )}
+                  {decision && <Typography variant='inherit'>decision: {decision}</Typography>}
+                </Stack>
+              </Box>
+
+              <Box
+                sx={{
+                  p: 2,
+                  bgcolor: 'background.paper',
+                  border: 1,
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                }}
+              >
+                <Typography
+                  variant='caption'
+                  fontWeight={700}
+                  color='text.secondary'
+                  fontFamily='monospace'
+                >
+                  RESPONSE
+                </Typography>
+                <Stack spacing={0.5} sx={{ mt: 1, fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                  {typeof step.duration_ms === 'number' && (
+                    <Typography variant='inherit'>duration_ms: {step.duration_ms}</Typography>
+                  )}
+                  {typeof step.result_rows_shown === 'number' && (
+                    <Typography variant='inherit'>rows_shown: {step.result_rows_shown}</Typography>
+                  )}
+                  {typeof step.result_rows_total === 'number' && (
+                    <Typography variant='inherit'>rows_total: {step.result_rows_total}</Typography>
+                  )}
+                  {typeof step.captured_bytes === 'number' && (
+                    <Typography variant='inherit'>captured_bytes: {step.captured_bytes}</Typography>
+                  )}
+                  {errorMessage && <Typography variant='inherit'>error: {errorMessage}</Typography>}
+                </Stack>
+              </Box>
+            </Stack>
+          </Box>
 
           {/* EVIDENCE (Input/Output) */}
           <Divider sx={{ my: 1, opacity: 0.5 }} />
@@ -254,7 +461,7 @@ export function EvidenceWorkspace({
 
           <Stack spacing={2}>
             <JsonViewer label='INPUT (ARGS)' data={step.args} />
-            {!!step.result && <JsonViewer label='RESULT' data={step.result} />}
+            {step.result != null && <JsonViewer label='RESULT' data={step.result} />}
           </Stack>
         </Stack>
       </Box>

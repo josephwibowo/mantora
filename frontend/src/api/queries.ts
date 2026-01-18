@@ -1,7 +1,14 @@
 import { type UseQueryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiFetch } from './client';
-import type { Cast, ObservedStep, PendingRequest, PolicyManifest, Session } from './types';
+import type {
+  Cast,
+  ObservedStep,
+  PendingRequest,
+  PolicyManifest,
+  Session,
+  SessionSummary,
+} from './types';
 
 export function useSessions() {
   return useQuery({
@@ -86,6 +93,24 @@ export function useSettings() {
     queryKey: ['settings'],
     queryFn: () => apiFetch<PolicyManifest>('/api/settings'),
     staleTime: Infinity, // Settings are static at runtime
+  });
+}
+
+export function useSessionsSummaries(sessionIds: string[]) {
+  const idsKey = [...sessionIds].sort().join('|');
+  return useQuery({
+    queryKey: ['sessionsSummaries', idsKey],
+    queryFn: async () => {
+      const entries = await Promise.all(
+        [...sessionIds].map(async (id) => {
+          const summary = await apiFetch<SessionSummary>(`/api/sessions/${id}/summary`);
+          return [id, summary] as const;
+        }),
+      );
+      return Object.fromEntries(entries) as Record<string, SessionSummary>;
+    },
+    enabled: sessionIds.length > 0,
+    refetchInterval: 5000,
   });
 }
 

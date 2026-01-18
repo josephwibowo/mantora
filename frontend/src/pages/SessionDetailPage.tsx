@@ -2,6 +2,10 @@ import {
   Alert,
   Box,
   CircularProgress,
+  Chip,
+  InputBase,
+  Paper,
+  Stack,
   Typography,
   List,
   ListItemButton,
@@ -13,7 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 
-import type { ObservedStep } from '../api/types';
+import type { ObservedStep, StepCategory } from '../api/types';
 import { subscribeToSteps } from '../api/sse';
 import {
   useAllowPending,
@@ -31,6 +35,15 @@ import { RightPanel } from '../components/RightPanel/RightPanel';
 import { TimelineFeed } from '../components/RightPanel/Timeline/TimelineFeed';
 import { SessionStatsBar } from '../components/SessionStatsBar';
 import { EvidenceWorkspace } from '../components/Workspace/EvidenceWorkspace';
+import {
+  computeStepNarrative,
+  extractSqlExcerpt,
+  extractTableTouched,
+  getStepCategory,
+  getStepStatusLabel,
+} from '../utils/stepUtils';
+
+type StatusFilter = 'all' | 'ok' | 'error' | 'blocked' | 'allowed' | 'denied' | 'timeout';
 
 export function SessionDetailPage() {
   const params = useParams();
@@ -51,6 +64,9 @@ export function SessionDetailPage() {
   const allSessions = useSessions();
 
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [categoryFilter, setCategoryFilter] = useState<StepCategory | 'all'>('all');
+  const [searchFilter, setSearchFilter] = useState('');
 
   const handleStepSelect = useCallback((stepId: string) => {
     setSelectedStepId(stepId);
@@ -77,6 +93,36 @@ export function SessionDetailPage() {
   }, [queryClient, sessionId]);
 
   const stepsData = useMemo(() => steps.data ?? [], [steps.data]);
+  const filteredSteps = useMemo(() => {
+    const search = searchFilter.trim().toLowerCase();
+
+    return stepsData.filter((step) => {
+      if (categoryFilter !== 'all' && getStepCategory(step) !== categoryFilter) return false;
+
+      const statusLabel = getStepStatusLabel(step);
+      if (statusFilter !== 'all') {
+        if (statusFilter === 'ok' && statusLabel !== 'OK') return false;
+        if (statusFilter === 'error' && statusLabel !== 'ERROR') return false;
+        if (statusFilter === 'blocked' && statusLabel !== 'BLOCKED') return false;
+        if (statusFilter === 'allowed' && statusLabel !== 'ALLOWED') return false;
+        if (statusFilter === 'denied' && statusLabel !== 'DENIED') return false;
+        if (statusFilter === 'timeout' && statusLabel !== 'TIMEOUT') return false;
+      }
+
+      if (!search) return true;
+
+      const narrative = computeStepNarrative(step).toLowerCase();
+      const sql = (extractSqlExcerpt(step) ?? '').toLowerCase();
+      const summary = (step.summary ?? '').toLowerCase();
+
+      return (
+        narrative.includes(search) ||
+        sql.includes(search) ||
+        summary.includes(search) ||
+        step.name.toLowerCase().includes(search)
+      );
+    });
+  }, [categoryFilter, searchFilter, statusFilter, stepsData]);
   const selectedStep = stepsData.find((s) => s.id === selectedStepId);
 
   // Find cast for selected step
@@ -89,7 +135,7 @@ export function SessionDetailPage() {
 
   // Calculate summary
   const summary = useMemo(() => {
-    return stepsData.reduce(
+    const baseStats = stepsData.reduce(
       (acc, s) => {
         if (s.kind === 'tool_call') acc.tool_calls++;
         // queries count
@@ -97,6 +143,7 @@ export function SessionDetailPage() {
         // casts count
         if (['cast_table', 'cast_chart', 'cast_note'].includes(s.name)) acc.casts++;
         if (s.kind === 'blocker') acc.blocks++;
+        if (getStepStatusLabel(s) === 'ALLOWED') acc.approvals++;
         if (s.status === 'error') acc.errors++;
         if (s.warnings) acc.warnings += s.warnings?.length ?? 0;
         return acc;
@@ -108,8 +155,20 @@ export function SessionDetailPage() {
         blocks: 0,
         errors: 0,
         warnings: 0,
+        approvals: 0,
       },
     );
+
+    const tables = new Set<string>();
+    for (const step of stepsData) {
+      const table = extractTableTouched(step);
+      if (table) tables.add(table);
+    }
+
+    return {
+      ...baseStats,
+      touched_tables: Array.from(tables).sort(),
+    };
   }, [stepsData]);
 
   // -- Sidebar Component --
@@ -169,9 +228,81 @@ export function SessionDetailPage() {
 
   // -- Right Panel (Timeline) --
   const Right = (
-    <RightPanel>
+    <RightPanel
+      controls={
+        <Stack spacing={1}>
+          <Stack direction='row' spacing={1} sx={{ flexWrap: 'wrap' }}>
+            {(
+              [
+                ['all', 'ALL'],
+                ['ok', 'OK'],
+                ['error', 'ERROR'],
+                ['blocked', 'BLOCKED'],
+                ['allowed', 'ALLOWED'],
+                ['denied', 'DENIED'],
+                ['timeout', 'TIMEOUT'],
+              ] as const
+            ).map(([value, label]) => (
+              <Chip
+                key={value}
+                label={label}
+                size='small'
+                variant={statusFilter === value ? 'filled' : 'outlined'}
+                onClick={() => setStatusFilter(value)}
+                sx={{ fontFamily: 'monospace', fontSize: '0.7rem', height: 22 }}
+              />
+            ))}
+          </Stack>
+
+          <Stack direction='row' spacing={1} sx={{ flexWrap: 'wrap' }}>
+            {(
+              [
+                ['all', 'ALL'],
+                ['query', 'QUERY'],
+                ['schema', 'SCHEMA'],
+                ['list', 'LIST'],
+                ['cast', 'CAST'],
+                ['unknown', 'UNKNOWN'],
+              ] as const
+            ).map(([value, label]) => (
+              <Chip
+                key={value}
+                label={label}
+                size='small'
+                variant={categoryFilter === value ? 'filled' : 'outlined'}
+                onClick={() => setCategoryFilter(value)}
+                sx={{ fontFamily: 'monospace', fontSize: '0.7rem', height: 22 }}
+              />
+            ))}
+          </Stack>
+
+          <Paper
+            elevation={0}
+            variant='outlined'
+            sx={{
+              px: 1,
+              py: 0.5,
+              borderRadius: 1,
+              borderColor: 'divider',
+              bgcolor: 'background.paper',
+            }}
+          >
+            <InputBase
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              placeholder='Search SQL / narrative...'
+              sx={{ fontSize: '0.8rem', fontFamily: 'monospace', width: '100%' }}
+            />
+          </Paper>
+
+          <Typography variant='caption' color='text.secondary' fontFamily='monospace'>
+            {filteredSteps.length} / {stepsData.length} steps
+          </Typography>
+        </Stack>
+      }
+    >
       <TimelineFeed
-        steps={stepsData}
+        steps={filteredSteps}
         selectedStepId={selectedStepId ?? undefined}
         onStepSelect={handleStepSelect}
       />
@@ -222,8 +353,11 @@ export function SessionDetailPage() {
     return <Alert severity='error'>{(session.error as Error).message}</Alert>;
   }
 
-  const handleExport = () => {
+  const handleExportMd = () => {
     window.location.href = `/api/sessions/${sessionId}/export.md`;
+  };
+  const handleExportJson = () => {
+    window.location.href = `/api/sessions/${sessionId}/export.json`;
   };
 
   return (
@@ -234,15 +368,25 @@ export function SessionDetailPage() {
           steps: stepsData,
           showBack: true,
           actions: (
-            <Button
-              startIcon={<DescriptionIcon />}
-              variant='outlined'
-              size='small'
-              onClick={handleExport}
-              sx={{ borderColor: 'divider', color: 'text.secondary' }}
-            >
-              Export Receipt
-            </Button>
+            <Stack direction='row' spacing={1}>
+              <Button
+                startIcon={<DescriptionIcon />}
+                variant='outlined'
+                size='small'
+                onClick={handleExportMd}
+                sx={{ borderColor: 'divider', color: 'text.secondary' }}
+              >
+                Export Receipt
+              </Button>
+              <Button
+                variant='outlined'
+                size='small'
+                onClick={handleExportJson}
+                sx={{ borderColor: 'divider', color: 'text.secondary' }}
+              >
+                Export JSON
+              </Button>
+            </Stack>
           ),
         }}
         subheader={<SessionStatsBar summary={summary} />}

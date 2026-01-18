@@ -3,6 +3,9 @@ export type TruncatedText = {
   truncated: boolean;
 };
 
+export type StepCategory = 'query' | 'schema' | 'list' | 'cast' | 'unknown';
+export type StepDecision = 'pending' | 'allowed' | 'denied' | 'timeout';
+
 export type Session = {
   id: string;
   title: string | null;
@@ -24,8 +27,20 @@ export type ObservedStep = {
   risk_level?: string | null;
   warnings?: string[] | null;
 
-  args: unknown;
-  result: unknown;
+  // Receipt/trace v1 (optional for backwards compatibility)
+  target_type?: string | null;
+  tool_category?: StepCategory | null;
+  sql?: TruncatedText | null;
+  sql_classification?: string | null;
+  policy_rule_ids?: string[] | null;
+  decision?: StepDecision | null;
+  result_rows_shown?: number | null;
+  result_rows_total?: number | null;
+  captured_bytes?: number | null;
+  error_message?: string | null;
+
+  args: unknown | null;
+  result: unknown | null;
 
   preview: TruncatedText | null;
 };
@@ -77,6 +92,8 @@ export type SessionSummary = {
   blocks: number;
   errors: number;
   warnings: number;
+  approvals?: number;
+  touched_tables?: string[];
 };
 
 export type PolicyRule = {
