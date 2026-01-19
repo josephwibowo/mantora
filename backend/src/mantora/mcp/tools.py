@@ -12,6 +12,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from mantora.casts.models import SchemaColumn, TableCast
+from mantora.models.events import SessionContext
 from mantora.policy.caps import CapsConfig, cap_tabular_data
 from mantora.store import SessionStore
 
@@ -33,11 +34,18 @@ class SessionTools:
         *,
         connection_id: UUID | None = None,
         timeout_seconds: float = 1800.0,
+        default_context: SessionContext | None = None,
+        client_id: str | None = None,
     ) -> None:
         self._store = store
         self._connection_id: UUID = connection_id or uuid4()
         self._session_ids: dict[UUID, UUID] = {}
         self._timeout_seconds = timeout_seconds
+        self._default_context = default_context
+        self._client_id = client_id
+
+    def set_default_context(self, context: SessionContext | None) -> None:
+        self._default_context = context
 
     @property
     def current_session_id(self) -> UUID | None:
@@ -47,7 +55,13 @@ class SessionTools:
     def _resolve_connection_id(self, connection_id: UUID | None) -> UUID:
         return connection_id or self._connection_id
 
-    def session_start(self, title: str | None = None, *, connection_id: UUID | None = None) -> str:
+    def session_start(
+        self,
+        title: str | None = None,
+        *,
+        connection_id: UUID | None = None,
+        context: SessionContext | None = None,
+    ) -> str:
         """Start a new session.
 
         Args:
@@ -57,7 +71,11 @@ class SessionTools:
         Returns:
             The new session ID as a string.
         """
-        session = self._store.create_session(title=title)
+        session = self._store.create_session(
+            title=title,
+            context=context or self._default_context,
+            client_id=self._client_id,
+        )
         resolved_connection_id = self._resolve_connection_id(connection_id)
         self._session_ids[resolved_connection_id] = session.id
         return str(session.id)
@@ -139,7 +157,11 @@ class SessionTools:
 
         # Create new session if needed
         if session_id is None:
-            session = self._store.create_session(title=None)
+            session = self._store.create_session(
+                title=None,
+                context=self._default_context,
+                client_id=self._client_id,
+            )
             session_id = session.id
             self._session_ids[resolved_connection_id] = session_id
         return session_id

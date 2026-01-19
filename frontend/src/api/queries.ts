@@ -6,14 +6,40 @@ import type {
   ObservedStep,
   PendingRequest,
   PolicyManifest,
+  ReceiptResult,
   Session,
   SessionSummary,
 } from './types';
 
-export function useSessions() {
+export interface SessionsFilterParams {
+  q?: string;
+  tag?: string;
+  repo_name?: string;
+  branch?: string;
+  since?: string;
+  has_warnings?: boolean;
+  has_blocks?: boolean;
+}
+
+function buildQueryParams(params: SessionsFilterParams | undefined): string {
+  if (!params) return '';
+  const qs = new URLSearchParams();
+  if (params.q) qs.set('q', params.q);
+  if (params.tag) qs.set('tag', params.tag);
+  if (params.repo_name) qs.set('repo_name', params.repo_name);
+  if (params.branch) qs.set('branch', params.branch);
+  if (params.since) qs.set('since', params.since);
+  if (params.has_warnings !== undefined) qs.set('has_warnings', String(params.has_warnings));
+  if (params.has_blocks !== undefined) qs.set('has_blocks', String(params.has_blocks));
+  const rendered = qs.toString();
+  return rendered ? `?${rendered}` : '';
+}
+
+export function useSessions(params?: SessionsFilterParams) {
+  const qs = buildQueryParams(params);
   return useQuery({
-    queryKey: ['sessions'],
-    queryFn: () => apiFetch<Session[]>('/api/sessions'),
+    queryKey: ['sessions', qs],
+    queryFn: () => apiFetch<Session[]>(`/api/sessions${qs}`),
     refetchInterval: 1000,
   });
 }
@@ -111,6 +137,58 @@ export function useSessionsSummaries(sessionIds: string[]) {
     },
     enabled: sessionIds.length > 0,
     refetchInterval: 5000,
+  });
+}
+
+export function useSessionRollup(sessionId: string) {
+  return useQuery({
+    queryKey: ['rollup', sessionId],
+    queryFn: () => apiFetch<SessionSummary>(`/api/sessions/${sessionId}/rollup`),
+    enabled: Boolean(sessionId),
+    refetchInterval: 5000,
+  });
+}
+
+export function useSessionReceipt(sessionId: string) {
+  return useMutation({
+    mutationFn: async (includeData: boolean) => {
+      return apiFetch<ReceiptResult>(`/api/sessions/${sessionId}/receipt`, {
+        method: 'POST',
+        body: JSON.stringify({ include_data: includeData }),
+      });
+    },
+  });
+}
+
+export function useUpdateSessionTag(sessionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (tag: string | null) => {
+      return apiFetch<Session>(`/api/sessions/${sessionId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ tag }),
+      });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      await queryClient.invalidateQueries({ queryKey: ['sessions'] });
+    },
+  });
+}
+
+export function useUpdateSessionRepoRoot(sessionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (repoRoot: string | null) => {
+      return apiFetch<Session>(`/api/sessions/${sessionId}/repo-root`, {
+        method: 'PUT',
+        body: JSON.stringify({ repo_root: repoRoot }),
+      });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      await queryClient.invalidateQueries({ queryKey: ['sessions'] });
+    },
   });
 }
 

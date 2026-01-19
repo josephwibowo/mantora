@@ -11,6 +11,7 @@ import { JsonViewer } from '../JsonViewer';
 
 import type { Cast, ObservedStep, PendingRequest } from '../../api/types';
 import { CastRenderer } from '../CastRenderer';
+import { useSettings } from '../../api/queries';
 import {
   computeStepNarrative,
   extractDatabaseErrorMessage,
@@ -36,6 +37,7 @@ export function EvidenceWorkspace({
   onDeny,
   isDecisionLoading,
 }: EvidenceWorkspaceProps) {
+  const settings = useSettings();
   if (!step) {
     return (
       <Box
@@ -389,9 +391,12 @@ export function EvidenceWorkspace({
                   color='text.secondary'
                   fontFamily='monospace'
                 >
-                  POLICY
+                  ANALYSIS
                 </Typography>
                 <Stack spacing={0.5} sx={{ mt: 1, fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                  {settings.data?.safety_mode && (
+                    <Typography variant='inherit'>mode: {settings.data.safety_mode}</Typography>
+                  )}
                   {step.sql_classification && (
                     <Typography variant='inherit'>
                       classification: {step.sql_classification}

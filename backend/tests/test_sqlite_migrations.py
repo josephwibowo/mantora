@@ -72,6 +72,7 @@ def test_sqlite_schema_migrates_steps_columns_additively(tmp_path: Path) -> None
         assert "result_rows_total" in cols
         assert "captured_bytes" in cols
         assert "error_message" in cols
+        assert "tables_touched_json" in cols
 
         session_id = uuid4()
         store._conn.execute(

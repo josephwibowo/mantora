@@ -4,9 +4,10 @@ import { ReactNode } from 'react';
 interface RightPanelProps {
   children: ReactNode;
   controls?: ReactNode;
+  headerContent?: ReactNode;
 }
 
-export function RightPanel({ children, controls }: RightPanelProps) {
+export function RightPanel({ children, controls, headerContent }: RightPanelProps) {
   return (
     <Box
       sx={{
@@ -19,9 +20,11 @@ export function RightPanel({ children, controls }: RightPanelProps) {
       }}
     >
       <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-        <Typography variant='overline' color='text.primary' fontWeight={700}>
-          TIMELINE
-        </Typography>
+        {headerContent || (
+          <Typography variant='overline' color='text.primary' fontWeight={700}>
+            TIMELINE
+          </Typography>
+        )}
         {controls && <Box sx={{ mt: 1 }}>{controls}</Box>}
       </Box>
       <Box sx={{ flexGrow: 1, overflow: 'auto' }}>{children}</Box>

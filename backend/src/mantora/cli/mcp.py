@@ -20,6 +20,15 @@ def configure_parser(subparsers: argparse._SubParsersAction) -> None:  # type: i
     parser.set_defaults(func=run_mcp)
     parser.add_argument("--config", type=Path, help="Path to config.toml")
     parser.add_argument(
+        "--project-root",
+        type=Path,
+        help="Project root for git context detection (default: auto-detect from cwd)",
+    )
+    parser.add_argument(
+        "--tag",
+        help="Optional session tag for filtering and PR receipts (e.g., JIRA ticket)",
+    )
+    parser.add_argument(
         "--connector",
         choices=["duckdb", "postgres"],
         help="Connector type for the target MCP server",
@@ -196,7 +205,14 @@ def run_mcp(args: argparse.Namespace) -> int:
         logging.getLogger().setLevel(logging.DEBUG)
 
     protective = _parse_protective(args.protective)
-    config = load_proxy_config(args.config, cli_overrides={"protective_mode": protective})
+    config = load_proxy_config(
+        args.config,
+        cli_overrides={
+            "protective_mode": protective,
+            "project_root": args.project_root,
+            "tag": args.tag,
+        },
+    )
 
     _apply_connector(args, config)
 

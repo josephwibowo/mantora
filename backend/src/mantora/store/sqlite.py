@@ -15,7 +15,14 @@ from pydantic import JsonValue
 
 from mantora.casts.models import Cast, TableCast
 from mantora.config.settings import LimitsConfig
-from mantora.models.events import ObservedStep, ObservedStepKind, Session, TruncatedText
+from mantora.models.events import (
+    ConfigSource,
+    ObservedStep,
+    ObservedStepKind,
+    Session,
+    SessionContext,
+    TruncatedText,
+)
 from mantora.policy.blocker import PendingRequest, PendingStatus
 from mantora.store.interface import SessionStore
 from mantora.store.retention import prune_sqlite_sessions
@@ -69,7 +76,25 @@ class SQLiteSessionStore(SessionStore):
                 CREATE TABLE IF NOT EXISTS sessions (
                     id TEXT PRIMARY KEY,
                     title TEXT,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    client_id TEXT,
+                    repo_root TEXT,
+                    repo_name TEXT,
+                    branch_name TEXT,
+                    commit_sha TEXT,
+                    is_dirty INTEGER,
+                    config_source TEXT,
+                    tag TEXT
+                )
+                """
+            )
+
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS client_defaults (
+                    client_id TEXT PRIMARY KEY,
+                    repo_root TEXT,
+                    updated_at TEXT NOT NULL
                 )
                 """
             )
@@ -98,6 +123,7 @@ class SQLiteSessionStore(SessionStore):
                     result_rows_total INTEGER,
                     captured_bytes INTEGER,
                     error_message TEXT,
+                    tables_touched_json TEXT,
                     args_json TEXT,
                     result_json TEXT,
                     preview_text TEXT,
@@ -171,6 +197,35 @@ class SQLiteSessionStore(SessionStore):
             )
 
             # Lightweight migrations for older DBs (add columns if missing)
+            session_cols = {
+                row["name"] for row in self._conn.execute("PRAGMA table_info(sessions)")
+            }
+            if "client_id" not in session_cols:
+                self._conn.execute("ALTER TABLE sessions ADD COLUMN client_id TEXT")
+            if "repo_root" not in session_cols:
+                self._conn.execute("ALTER TABLE sessions ADD COLUMN repo_root TEXT")
+            if "repo_name" not in session_cols:
+                self._conn.execute("ALTER TABLE sessions ADD COLUMN repo_name TEXT")
+            if "branch_name" not in session_cols:
+                self._conn.execute("ALTER TABLE sessions ADD COLUMN branch_name TEXT")
+            if "commit_sha" not in session_cols:
+                self._conn.execute("ALTER TABLE sessions ADD COLUMN commit_sha TEXT")
+            if "is_dirty" not in session_cols:
+                self._conn.execute("ALTER TABLE sessions ADD COLUMN is_dirty INTEGER")
+            if "config_source" not in session_cols:
+                self._conn.execute("ALTER TABLE sessions ADD COLUMN config_source TEXT")
+            if "tag" not in session_cols:
+                self._conn.execute("ALTER TABLE sessions ADD COLUMN tag TEXT")
+
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sessions_branch ON sessions(branch_name)"
+            )
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sessions_repo ON sessions(repo_name)"
+            )
+            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_tag ON sessions(tag)")
+
+            # Lightweight migrations for older DBs (add columns if missing)
             step_cols = {row["name"] for row in self._conn.execute("PRAGMA table_info(steps)")}
             if "summary_text" not in step_cols:
                 self._conn.execute("ALTER TABLE steps ADD COLUMN summary_text TEXT")
@@ -200,6 +255,8 @@ class SQLiteSessionStore(SessionStore):
                 self._conn.execute("ALTER TABLE steps ADD COLUMN captured_bytes INTEGER")
             if "error_message" not in step_cols:
                 self._conn.execute("ALTER TABLE steps ADD COLUMN error_message TEXT")
+            if "tables_touched_json" not in step_cols:
+                self._conn.execute("ALTER TABLE steps ADD COLUMN tables_touched_json TEXT")
         self._checkpoint()
 
     def _checkpoint(self) -> None:
@@ -235,37 +292,185 @@ class SQLiteSessionStore(SessionStore):
         finally:
             self._prune_lock.release()
 
-    def create_session(self, *, title: str | None) -> Session:
+    def create_session(
+        self,
+        *,
+        title: str | None,
+        context: SessionContext | None = None,
+        client_id: str | None = None,
+    ) -> Session:
         session_id = uuid4()
         created_at = datetime.now(UTC)
 
+        repo_root = context.repo_root if context else None
+        repo_name = context.repo_name if context else None
+        branch_name = context.branch if context else None
+        commit_sha = context.commit if context else None
+        is_dirty = (1 if context.dirty else 0) if (context and context.dirty is not None) else None
+        config_source = context.config_source if context else None
+        tag = context.tag if context else None
+
         with self._lock:
             self._conn.execute(
-                "INSERT INTO sessions (id, title, created_at) VALUES (?, ?, ?)",
-                (str(session_id), title, created_at.isoformat()),
+                """
+                INSERT INTO sessions (
+                    id,
+                    title,
+                    created_at,
+                    client_id,
+                    repo_root,
+                    repo_name,
+                    branch_name,
+                    commit_sha,
+                    is_dirty,
+                    config_source,
+                    tag
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """.strip(),
+                (
+                    str(session_id),
+                    title,
+                    created_at.isoformat(),
+                    client_id,
+                    repo_root,
+                    repo_name,
+                    branch_name,
+                    commit_sha,
+                    is_dirty,
+                    config_source,
+                    tag,
+                ),
             )
         self._checkpoint()
 
-        session = Session(id=session_id, title=title, created_at=created_at)
+        session = Session(id=session_id, title=title, created_at=created_at, context=context)
         self._queues[session_id] = asyncio.Queue()
         return session
 
-    def list_sessions(self) -> Sequence[Session]:
+    def list_sessions(
+        self,
+        *,
+        q: str | None = None,
+        tag: str | None = None,
+        repo_name: str | None = None,
+        branch: str | None = None,
+        since: datetime | None = None,
+        has_warnings: bool | None = None,
+        has_blocks: bool | None = None,
+    ) -> Sequence[Session]:
         # Create a fresh connection for read operations to ensure WAL visibility
         conn = _connect(self._db_path)
         try:
+            where: list[str] = []
+            params: list[object] = []
+
+            if tag is not None:
+                where.append("tag = ?")
+                params.append(tag)
+            if repo_name is not None:
+                where.append("repo_name = ?")
+                params.append(repo_name)
+            if branch is not None:
+                where.append("branch_name = ?")
+                params.append(branch)
+            if since is not None:
+                where.append("created_at >= ?")
+                params.append(since.isoformat())
+
+            if has_warnings is not None:
+                clause = (
+                    "EXISTS (SELECT 1 FROM steps WHERE steps.session_id = sessions.id "
+                    "AND warnings_json IS NOT NULL AND warnings_json != '[]')"
+                )
+                where.append(clause if has_warnings else f"NOT {clause}")
+
+            if has_blocks is not None:
+                clause = (
+                    "EXISTS (SELECT 1 FROM steps WHERE steps.session_id = sessions.id "
+                    "AND kind = 'blocker')"
+                )
+                where.append(clause if has_blocks else f"NOT {clause}")
+
+            if q is not None and q.strip():
+                needle = f"%{q.strip().lower()}%"
+                where.append(
+                    "("
+                    "LOWER(COALESCE(title, '')) LIKE ? OR "
+                    "LOWER(COALESCE(repo_name, '')) LIKE ? OR "
+                    "LOWER(COALESCE(branch_name, '')) LIKE ? OR "
+                    "LOWER(COALESCE(tag, '')) LIKE ?"
+                    ")"
+                )
+                params.extend([needle, needle, needle, needle])
+
+            where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+
             with self._lock:
                 rows = conn.execute(
-                    "SELECT id, title, created_at FROM sessions ORDER BY created_at DESC"
+                    f"""
+                    SELECT
+                        id,
+                        title,
+                        created_at,
+                        repo_root,
+                        repo_name,
+                        branch_name,
+                        commit_sha,
+                        is_dirty,
+                        config_source,
+                        tag
+                    FROM sessions
+                    {where_sql}
+                    ORDER BY created_at DESC
+                    """.strip(),
+                    params,
                 ).fetchall()
 
             sessions: list[Session] = []
             for row in rows:
+                context: SessionContext | None = None
+                if any(
+                    row[k] is not None
+                    for k in (
+                        "repo_root",
+                        "repo_name",
+                        "branch_name",
+                        "commit_sha",
+                        "is_dirty",
+                        "config_source",
+                        "tag",
+                    )
+                ):
+                    raw_source = row["config_source"]
+                    config_source: ConfigSource
+                    if isinstance(raw_source, str) and raw_source in (
+                        "cli",
+                        "env",
+                        "pinned",
+                        "roots",
+                        "ui",
+                        "git",
+                        "unknown",
+                    ):
+                        config_source = cast(ConfigSource, raw_source)
+                    else:
+                        config_source = "unknown"
+                    context = SessionContext(
+                        repo_root=row["repo_root"],
+                        repo_name=row["repo_name"],
+                        branch=row["branch_name"],
+                        commit=row["commit_sha"],
+                        dirty=(bool(row["is_dirty"]) if row["is_dirty"] is not None else None),
+                        config_source=config_source,
+                        tag=row["tag"],
+                    )
                 sessions.append(
                     Session(
                         id=UUID(row["id"]),
                         title=row["title"],
                         created_at=datetime.fromisoformat(row["created_at"]),
+                        context=context,
                     )
                 )
             return sessions
@@ -278,20 +483,178 @@ class SQLiteSessionStore(SessionStore):
         try:
             with self._lock:
                 row = conn.execute(
-                    "SELECT id, title, created_at FROM sessions WHERE id = ?",
+                    """
+                    SELECT
+                        id,
+                        title,
+                        created_at,
+                        repo_root,
+                        repo_name,
+                        branch_name,
+                        commit_sha,
+                        is_dirty,
+                        config_source,
+                        tag
+                    FROM sessions
+                    WHERE id = ?
+                    """.strip(),
                     (str(session_id),),
                 ).fetchone()
 
             if row is None:
                 return None
 
+            context: SessionContext | None = None
+            if any(
+                row[k] is not None
+                for k in (
+                    "repo_root",
+                    "repo_name",
+                    "branch_name",
+                    "commit_sha",
+                    "is_dirty",
+                    "config_source",
+                    "tag",
+                )
+            ):
+                raw_source = row["config_source"]
+                config_source: ConfigSource
+                if isinstance(raw_source, str) and raw_source in (
+                    "cli",
+                    "env",
+                    "pinned",
+                    "roots",
+                    "ui",
+                    "git",
+                    "unknown",
+                ):
+                    config_source = cast(ConfigSource, raw_source)
+                else:
+                    config_source = "unknown"
+                context = SessionContext(
+                    repo_root=row["repo_root"],
+                    repo_name=row["repo_name"],
+                    branch=row["branch_name"],
+                    commit=row["commit_sha"],
+                    dirty=(bool(row["is_dirty"]) if row["is_dirty"] is not None else None),
+                    config_source=config_source,
+                    tag=row["tag"],
+                )
+
             return Session(
                 id=UUID(row["id"]),
                 title=row["title"],
                 created_at=datetime.fromisoformat(row["created_at"]),
+                context=context,
             )
         finally:
             conn.close()
+
+    def update_session_tag(self, session_id: UUID, *, tag: str | None) -> Session | None:
+        with self._lock:
+            result = self._conn.execute(
+                "UPDATE sessions SET tag = ? WHERE id = ?",
+                (tag, str(session_id)),
+            )
+            if result.rowcount == 0:
+                return None
+        self._checkpoint()
+        return self.get_session(session_id)
+
+    def update_session_context(
+        self, session_id: UUID, *, context: SessionContext | None
+    ) -> Session | None:
+        repo_root = context.repo_root if context else None
+        repo_name = context.repo_name if context else None
+        branch_name = context.branch if context else None
+        commit_sha = context.commit if context else None
+        is_dirty = (1 if context.dirty else 0) if (context and context.dirty is not None) else None
+        config_source = context.config_source if context else None
+        tag = context.tag if context else None
+
+        with self._lock:
+            result = self._conn.execute(
+                """
+                UPDATE sessions
+                SET
+                    repo_root = ?,
+                    repo_name = ?,
+                    branch_name = ?,
+                    commit_sha = ?,
+                    is_dirty = ?,
+                    config_source = ?,
+                    tag = ?
+                WHERE id = ?
+                """.strip(),
+                (
+                    repo_root,
+                    repo_name,
+                    branch_name,
+                    commit_sha,
+                    is_dirty,
+                    config_source,
+                    tag,
+                    str(session_id),
+                ),
+            )
+            if result.rowcount == 0:
+                return None
+        self._checkpoint()
+        return self.get_session(session_id)
+
+    def get_session_client_id(self, session_id: UUID) -> str | None:
+        conn = _connect(self._db_path)
+        try:
+            with self._lock:
+                row = conn.execute(
+                    "SELECT client_id FROM sessions WHERE id = ?",
+                    (str(session_id),),
+                ).fetchone()
+            if row is None:
+                return None
+            raw = row["client_id"]
+            return raw if isinstance(raw, str) and raw.strip() else None
+        finally:
+            conn.close()
+
+    def get_client_default_repo_root(self, client_id: str) -> str | None:
+        conn = _connect(self._db_path)
+        try:
+            with self._lock:
+                row = conn.execute(
+                    "SELECT repo_root FROM client_defaults WHERE client_id = ?",
+                    (client_id,),
+                ).fetchone()
+            if row is None:
+                return None
+            raw = row["repo_root"]
+            return raw if isinstance(raw, str) and raw.strip() else None
+        finally:
+            conn.close()
+
+    def set_client_default_repo_root(self, client_id: str, *, repo_root: str | None) -> None:
+        now = datetime.now(UTC).isoformat()
+        cleaned = repo_root.strip() if isinstance(repo_root, str) else ""
+        persisted = cleaned if cleaned else None
+
+        with self._lock:
+            if persisted is None:
+                self._conn.execute(
+                    "DELETE FROM client_defaults WHERE client_id = ?",
+                    (client_id,),
+                )
+            else:
+                self._conn.execute(
+                    """
+                    INSERT INTO client_defaults (client_id, repo_root, updated_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(client_id) DO UPDATE SET
+                        repo_root = excluded.repo_root,
+                        updated_at = excluded.updated_at
+                    """.strip(),
+                    (client_id, persisted, now),
+                )
+        self._checkpoint()
 
     def session_exists(self, session_id: UUID) -> bool:
         """Check if a session exists without fetching full session data."""
@@ -361,6 +724,11 @@ class SQLiteSessionStore(SessionStore):
         warnings_json = (
             json.dumps(step.warnings, separators=(",", ":")) if step.warnings is not None else None
         )
+        tables_touched_json = (
+            json.dumps(step.tables_touched, separators=(",", ":"))
+            if step.tables_touched is not None
+            else None
+        )
         policy_rule_ids_json = (
             json.dumps(step.policy_rule_ids, separators=(",", ":"))
             if step.policy_rule_ids is not None
@@ -421,12 +789,15 @@ class SQLiteSessionStore(SessionStore):
                     result_rows_total,
                     captured_bytes,
                     error_message,
+                    tables_touched_json,
                     args_json,
                     result_json,
                     preview_text,
                     preview_truncated
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )
                 """.strip(),
                 (
                     str(step.id),
@@ -450,6 +821,7 @@ class SQLiteSessionStore(SessionStore):
                     step.result_rows_total,
                     step.captured_bytes,
                     step.error_message,
+                    tables_touched_json,
                     args_json,
                     result_json,
                     preview_text,
@@ -625,6 +997,7 @@ class SQLiteSessionStore(SessionStore):
                         result_rows_total,
                         captured_bytes,
                         error_message,
+                        tables_touched_json,
                         args_json,
                         result_json,
                         preview_text,
@@ -643,6 +1016,11 @@ class SQLiteSessionStore(SessionStore):
 
                 warnings = (
                     json.loads(row["warnings_json"]) if row["warnings_json"] is not None else None
+                )
+                tables_touched = (
+                    json.loads(row["tables_touched_json"])
+                    if row["tables_touched_json"] is not None
+                    else None
                 )
                 policy_rule_ids = (
                     json.loads(row["policy_rule_ids_json"])
@@ -678,6 +1056,7 @@ class SQLiteSessionStore(SessionStore):
                         summary=row["summary_text"],
                         risk_level=row["risk_level"],
                         warnings=warnings,
+                        tables_touched=tables_touched,
                         target_type=row["target_type"],
                         tool_category=row["tool_category"],
                         sql=sql,

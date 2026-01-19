@@ -27,6 +27,7 @@ dependencies = [
   "pydantic>=2.6",
   "mcp>=1.0",
   "rich>=13.0",
+  "sqlglot>=28.6.0",
 ]
 
 [project.urls]
@@ -52,6 +53,7 @@ dev = [
   "pytest>=8.0",
   "pytest-asyncio>=0.24",
   "ruff>=0.4",
+  "types-jsonschema>=4.26.0.20260109",
 ]
 
 [tool.hatch.build.targets.wheel]

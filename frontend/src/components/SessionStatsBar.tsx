@@ -52,7 +52,7 @@ export function SessionStatsBar({ summary }: SessionStatsBarProps) {
     );
   };
 
-  const tableCount = summary.touched_tables?.length ?? 0;
+  const tableCount = summary.tables_touched?.length ?? 0;
 
   return (
     <Box
