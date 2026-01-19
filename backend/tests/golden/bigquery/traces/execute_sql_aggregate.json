@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "tool_name": "execute_sql",
+  "arguments": { "sql": "SELECT COUNT(1) AS n FROM UNNEST([1,2,3]) AS x" },
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"columns\":[\"n\"],\"rows\":[[3]],\"row_count\":1}"
+      }
+    ],
+    "structuredContent": null,
+    "isError": false
+  },
+  "is_error": false,
+  "error_message": null,
+  "expected": {
+    "category": "query",
+    "evidence": { "sql": "SELECT COUNT(1) AS n FROM UNNEST([1,2,3]) AS x" }
+  }
+}
+

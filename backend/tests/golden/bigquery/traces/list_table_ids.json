@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "tool_name": "list_table_ids",
+  "arguments": { "project_id": "<redacted_project_id>", "dataset_id": "test_dataset" },
+  "result": {
+    "content": [
+      { "type": "text", "text": "{\"tables\":[\"users\"],\"count\":1}" }
+    ],
+    "structuredContent": null,
+    "isError": false
+  },
+  "is_error": false,
+  "error_message": null,
+  "expected": {
+    "category": "list",
+    "evidence": {
+      "project_id": "<redacted_project_id>",
+      "dataset_id": "test_dataset",
+      "list_type": "tables"
+    }
+  }
+}
+

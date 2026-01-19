@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mantora.dev/schemas/golden-trace-v1.json",
+  "title": "Mantora Golden MCP Trace Fixtures (v1)",
+  "type": "object",
+  "$comment": "This schema validates either tools.json or traces/*.json files. Validation selects the appropriate definition based on the file path in tests.",
+  "oneOf": [
+    { "$ref": "#/$defs/toolsFile" },
+    { "$ref": "#/$defs/traceFile" }
+  ],
+  "$defs": {
+    "jsonSchema": {
+      "type": "object",
+      "description": "A JSON Schema object."
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "inputSchema"],
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "inputSchema": { "$ref": "#/$defs/jsonSchema" },
+        "outputSchema": { "$ref": "#/$defs/jsonSchema" }
+      }
+    },
+    "toolsFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tools"],
+      "properties": {
+        "version": { "type": "integer", "const": 1 },
+        "target_type": { "type": "string" },
+        "tools": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/tool" }
+        }
+      }
+    },
+    "callToolResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["content", "isError"],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["type"],
+            "properties": {
+              "type": { "type": "string" }
+            }
+          }
+        },
+        "structuredContent": { "type": ["object", "null"] },
+        "isError": { "type": "boolean" }
+      }
+    },
+    "traceFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool_name", "arguments", "result", "is_error"],
+      "properties": {
+        "version": { "type": "integer", "const": 1 },
+        "tool_name": { "type": "string" },
+        "arguments": { "type": "object" },
+        "result": { "$ref": "#/$defs/callToolResult" },
+        "is_error": { "type": "boolean" },
+        "error_message": { "type": ["string", "null"] },
+        "expected": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["category"],
+          "properties": {
+            "category": {
+              "type": "string",
+              "enum": ["query", "schema", "list", "unknown"]
+            },
+            "evidence": { "type": "object" }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "is_error": { "const": true } } },
+          "then": { "required": ["error_message"] }
+        }
+      ]
+    }
+  }
+}

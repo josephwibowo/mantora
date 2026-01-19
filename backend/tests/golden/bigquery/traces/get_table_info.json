@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "tool_name": "get_table_info",
+  "arguments": {
+    "project_id": "<redacted_project_id>",
+    "dataset_id": "test_dataset",
+    "table_id": "users"
+  },
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"table\":\"users\",\"columns\":[{\"name\":\"id\",\"type\":\"INT64\"},{\"name\":\"email\",\"type\":\"STRING\"}]}"
+      }
+    ],
+    "structuredContent": null,
+    "isError": false
+  },
+  "is_error": false,
+  "error_message": null,
+  "expected": {
+    "category": "schema",
+    "evidence": {
+      "project_id": "<redacted_project_id>",
+      "dataset_id": "test_dataset",
+      "table": "users"
+    }
+  }
+}
+

@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "tool_name": "query",
+  "arguments": { "sql": "SELEC 1" },
+  "result": {
+    "content": [{ "type": "text", "text": "PARSE_SYNTAX_ERROR: Syntax error at or near 'SELEC'" }],
+    "structuredContent": null,
+    "isError": true
+  },
+  "is_error": true,
+  "error_message": "PARSE_SYNTAX_ERROR: Syntax error at or near 'SELEC'",
+  "expected": { "category": "query", "evidence": { "sql": "SELEC 1" } }
+}
+

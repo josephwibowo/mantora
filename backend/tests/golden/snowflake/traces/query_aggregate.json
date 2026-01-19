@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "tool_name": "query",
+  "arguments": { "sql": "SELECT COUNT(1) AS n FROM VALUES (1),(2),(3)" },
+  "result": {
+    "content": [{ "type": "text", "text": "{\"columns\":[\"n\"],\"rows\":[[3]]}" }],
+    "structuredContent": null,
+    "isError": false
+  },
+  "is_error": false,
+  "error_message": null,
+  "expected": {
+    "category": "query",
+    "evidence": { "sql": "SELECT COUNT(1) AS n FROM VALUES (1),(2),(3)" }
+  }
+}
+

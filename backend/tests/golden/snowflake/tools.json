@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "target_type": "snowflake",
+  "tools": [
+    {
+      "name": "query",
+      "description": "Execute a SQL query",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "sql": { "type": "string" } },
+        "required": ["sql"]
+      }
+    },
+    {
+      "name": "list_databases",
+      "description": "List databases",
+      "inputSchema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "list_schemas",
+      "description": "List schemas in a database",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "database": { "type": "string" } }
+      }
+    },
+    {
+      "name": "list_tables",
+      "description": "List tables in a schema",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "database": { "type": "string" }, "schema": { "type": "string" } }
+      }
+    },
+    {
+      "name": "describe_table",
+      "description": "Describe a table",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "database": { "type": "string" },
+          "schema": { "type": "string" },
+          "table": { "type": "string" }
+        },
+        "required": ["table"]
+      }
+    }
+  ]
+}
+
