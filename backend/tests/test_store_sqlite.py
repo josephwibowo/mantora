@@ -49,6 +49,24 @@ def test_sqlite_store_persists_sessions_and_steps(tmp_path: Path) -> None:
     store2.close()
 
 
+def test_sqlite_store_updates_session_tag(tmp_path: Path) -> None:
+    db_path = tmp_path / "sessions.db"
+    store = SQLiteSessionStore(db_path)
+
+    session = store.create_session(title="tagged")
+    updated = store.update_session_tag(session.id, tag="JIRA-123")
+    assert updated is not None
+    assert updated.context is not None
+    assert updated.context.tag == "JIRA-123"
+
+    cleared = store.update_session_tag(session.id, tag=None)
+    assert cleared is not None
+    if cleared.context is not None:
+        assert cleared.context.tag is None
+
+    store.close()
+
+
 def test_prune_sqlite_sessions_deletes_steps(tmp_path: Path) -> None:
     db_path = tmp_path / "sessions.db"
 

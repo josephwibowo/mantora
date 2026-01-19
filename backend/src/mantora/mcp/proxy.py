@@ -14,6 +14,7 @@ The proxy:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import time
@@ -21,6 +22,7 @@ from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
@@ -34,10 +36,12 @@ from pydantic import JsonValue
 from mantora.config import ProxyConfig
 from mantora.config.settings import PolicyConfig
 from mantora.connectors.registry import get_adapter
+from mantora.context import ContextResolver
 from mantora.mcp.tools import CastTools, SessionTools
-from mantora.models.events import ObservedStep, TruncatedText
+from mantora.models.events import ObservedStep, SessionContext, TruncatedText
 from mantora.policy.allowlist import is_tool_known_safe
 from mantora.policy.blocker import PendingDecision, PendingRequest, PendingStatus, blocker_summary
+from mantora.policy.linter import extract_tables_touched
 from mantora.policy.sql_guard import SQLGuardResult, SQLWarning, analyze_sql, should_block_sql
 from mantora.policy.truncation import cap_text
 from mantora.store import SessionStore
@@ -107,6 +111,9 @@ class MCPProxy:
     _client_session: ClientSession | None = field(default=None, init=False)
     _target_tools: list[types.Tool] = field(default_factory=list, init=False)
     _connection_id: UUID = field(init=False)
+    _default_context: SessionContext | None = field(default=None, init=False)
+    _client_id: str = field(init=False)
+    _default_repo_root: str | None = field(default=None, init=False)
 
     # v0: synchronous human approval for risky operations (stored in sqlite for cross-process UI)
     _blocker_timeout_s: float = 300.0
@@ -115,11 +122,17 @@ class MCPProxy:
         if self.hooks is None:
             self.hooks = ProxyHooks(config=self.config)
         self._connection_id = uuid4()
+        self._client_id = self._compute_client_id()
+        self._ensure_default_context()
         # Default timeout: 30 minutes (1800 seconds)
         # Set to 0 to disable timeout
         timeout_seconds = 1800.0
         self._session_tools = SessionTools(
-            self.store, connection_id=self._connection_id, timeout_seconds=timeout_seconds
+            self.store,
+            connection_id=self._connection_id,
+            timeout_seconds=timeout_seconds,
+            default_context=self._default_context,
+            client_id=self._client_id,
         )
         self._cast_tools = CastTools(self.store, self._session_tools)
         self._server = Server("mantora-proxy")
@@ -127,7 +140,50 @@ class MCPProxy:
 
     def start_session(self, title: str | None = None) -> str:
         """Start a session ahead of the first tool call."""
+        self._ensure_default_context()
         return self._session_tools.session_start(title=title, connection_id=self._connection_id)
+
+    def _compute_client_id(self) -> str:
+        payload = json.dumps(
+            {"target_type": self.config.target.type, "command": self.config.target.command},
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
+
+    def _merge_tag_override(self, context: SessionContext | None) -> SessionContext | None:
+        if not (self.config.tag and self.config.tag.strip()):
+            return context
+        tag_capped, _ = cap_text(self.config.tag.strip(), max_bytes=200)
+        if context is None:
+            return SessionContext(tag=tag_capped, config_source="cli")
+        return SessionContext(**context.model_dump(exclude={"tag"}), tag=tag_capped)
+
+    def _ensure_default_context(self) -> None:
+        resolver = ContextResolver()
+
+        if self.config.project_root is not None:
+            ctx = resolver.resolve(project_root=self.config.project_root, forced_source="cli")
+            ctx = self._merge_tag_override(ctx)
+            self._default_context = ctx
+            self._default_repo_root = ctx.repo_root if ctx else None
+            return
+
+        repo_root = self.store.get_client_default_repo_root(self._client_id)
+        if repo_root == self._default_repo_root:
+            return
+
+        ctx = (
+            resolver.resolve(project_root=Path(repo_root), forced_source="ui")
+            if repo_root
+            else None
+        )
+        ctx = self._merge_tag_override(ctx)
+        self._default_context = ctx
+        self._default_repo_root = repo_root
+
+        if hasattr(self, "_session_tools"):
+            self._session_tools.set_default_context(ctx)
 
     def _extract_sql_argument(self, *, tool_name: str, arguments: dict[str, Any]) -> str | None:
         """Extract SQL from a tool call using the configured adapter.
@@ -290,6 +346,7 @@ class MCPProxy:
         rpc_is_error = False
 
         try:
+            self._ensure_default_context()
             if name in ("session_start", "session_end", "session_current"):
                 result: Sequence[
                     types.TextContent | types.ImageContent | types.EmbeddedResource
@@ -424,6 +481,7 @@ class MCPProxy:
         sql_classification: str | None = None
         risk_level: str | None = None
         warnings: list[str] | None = None
+        tables_touched: list[str] | None = None
         error_message: str | None = None
         result_rows_shown: int | None = None
         result_rows_total: int | None = None
@@ -454,6 +512,7 @@ class MCPProxy:
             risk_level = guard_result.risk_level.value
             if guard_result.warnings:
                 warnings = [w.value for w in guard_result.warnings]
+            tables_touched = extract_tables_touched(sql_for_analysis)
 
         # Create preview text from result
 
@@ -509,6 +568,7 @@ class MCPProxy:
             summary=_compute_step_summary(name=name, status=status),
             risk_level=risk_level,
             warnings=warnings,
+            tables_touched=tables_touched,
             target_type=target_type,
             tool_category=category if category != "session" else None,
             sql=sql,
@@ -636,6 +696,7 @@ class MCPProxy:
             summary=f"Blocked: {pending.reason or 'High-risk SQL'}",
             risk_level=pending.risk_level,
             warnings=[w.value for w in guard.warnings] if guard.warnings else None,
+            tables_touched=extract_tables_touched(sql),
             target_type=target_type,
             tool_category=tool_category if tool_category != "session" else None,
             sql=sql_excerpt,

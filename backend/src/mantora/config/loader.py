@@ -33,6 +33,8 @@ class ProxyConfig(BaseModel):
     limits: LimitsConfig = Field(default_factory=LimitsConfig)
     target: TargetConfig = Field(default_factory=TargetConfig)
     sqlite_path: Path | None = None
+    project_root: Path | None = None
+    tag: str | None = None
 
 
 _LEGACY_CONFIG_PATH = Path.home() / ".mantora" / "config.toml"
@@ -119,6 +121,12 @@ def merge_cli_overrides(config: ProxyConfig, overrides: Mapping[str, Any]) -> Pr
     if "sqlite_path" in overrides and overrides["sqlite_path"] is not None:
         config.sqlite_path = Path(overrides["sqlite_path"])
 
+    if "project_root" in overrides and overrides["project_root"] is not None:
+        config.project_root = Path(overrides["project_root"])
+
+    if "tag" in overrides and overrides["tag"] is not None:
+        config.tag = str(overrides["tag"])
+
     return config
 
 
@@ -173,6 +181,15 @@ def load_proxy_config(
         if not db_path.is_absolute():
             db_path = path.parent / db_path
         proxy_data["sqlite_path"] = db_path
+
+    if "project_root" in data:
+        project_root = Path(data["project_root"])
+        if not project_root.is_absolute():
+            project_root = path.parent / project_root
+        proxy_data["project_root"] = project_root
+
+    if "tag" in data:
+        proxy_data["tag"] = data["tag"]
 
     config = ProxyConfig.model_validate(proxy_data)
     if cli_overrides:

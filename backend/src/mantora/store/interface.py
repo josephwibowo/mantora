@@ -9,16 +9,44 @@ from uuid import UUID
 from pydantic import JsonValue
 
 from mantora.casts.models import Cast
-from mantora.models.events import ObservedStep, Session
+from mantora.models.events import ObservedStep, Session, SessionContext
 from mantora.policy.blocker import PendingRequest, PendingStatus
 
 
 class SessionStore(Protocol):
-    def create_session(self, *, title: str | None) -> Session: ...
+    def create_session(
+        self,
+        *,
+        title: str | None,
+        context: SessionContext | None = None,
+        client_id: str | None = None,
+    ) -> Session: ...
 
-    def list_sessions(self) -> Sequence[Session]: ...
+    def list_sessions(
+        self,
+        *,
+        q: str | None = None,
+        tag: str | None = None,
+        repo_name: str | None = None,
+        branch: str | None = None,
+        since: datetime | None = None,
+        has_warnings: bool | None = None,
+        has_blocks: bool | None = None,
+    ) -> Sequence[Session]: ...
 
     def get_session(self, session_id: UUID) -> Session | None: ...
+
+    def update_session_tag(self, session_id: UUID, *, tag: str | None) -> Session | None: ...
+
+    def update_session_context(
+        self, session_id: UUID, *, context: SessionContext | None
+    ) -> Session | None: ...
+
+    def get_session_client_id(self, session_id: UUID) -> str | None: ...
+
+    def get_client_default_repo_root(self, client_id: str) -> str | None: ...
+
+    def set_client_default_repo_root(self, client_id: str, *, repo_root: str | None) -> None: ...
 
     def session_exists(self, session_id: UUID) -> bool:
         """Check if a session exists without fetching full session data.

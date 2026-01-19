@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 from pydantic import JsonValue
 
 from mantora.casts.models import Cast
-from mantora.models.events import ObservedStep, Session
+from mantora.models.events import ObservedStep, Session, SessionContext
 from mantora.policy.blocker import PendingRequest, PendingStatus
 from mantora.store.interface import SessionStore
 
@@ -21,21 +21,118 @@ class MemorySessionStore(SessionStore):
         self._casts: dict[UUID, Cast] = {}  # cast_id -> Cast
         self._session_casts: dict[UUID, list[UUID]] = {}  # session_id -> cast_ids
         self._pending: dict[UUID, PendingRequest] = {}  # request_id -> PendingRequest
+        self._session_client_ids: dict[UUID, str | None] = {}
+        self._client_default_repo_roots: dict[str, str] = {}
 
-    def create_session(self, *, title: str | None) -> Session:
+    def create_session(
+        self,
+        *,
+        title: str | None,
+        context: SessionContext | None = None,
+        client_id: str | None = None,
+    ) -> Session:
         session_id = uuid4()
-        session = Session(id=session_id, title=title, created_at=datetime.now(UTC))
+        session = Session(id=session_id, title=title, created_at=datetime.now(UTC), context=context)
         self._sessions[session_id] = session
+        self._session_client_ids[session_id] = client_id
         self._steps[session_id] = []
         self._queues[session_id] = asyncio.Queue()
         self._session_casts[session_id] = []
         return session
 
-    def list_sessions(self) -> Sequence[Session]:
-        return sorted(self._sessions.values(), key=lambda s: s.created_at, reverse=True)
+    def list_sessions(
+        self,
+        *,
+        q: str | None = None,
+        tag: str | None = None,
+        repo_name: str | None = None,
+        branch: str | None = None,
+        since: datetime | None = None,
+        has_warnings: bool | None = None,
+        has_blocks: bool | None = None,
+    ) -> Sequence[Session]:
+        sessions = list(self._sessions.values())
+
+        if since is not None:
+            sessions = [s for s in sessions if s.created_at >= since]
+
+        def matches(s: Session) -> bool:
+            ctx = s.context
+            if tag is not None and ((ctx is None) or (ctx.tag != tag)):
+                return False
+            if repo_name is not None and ((ctx is None) or (ctx.repo_name != repo_name)):
+                return False
+            if branch is not None and ((ctx is None) or (ctx.branch != branch)):
+                return False
+
+            if has_warnings is not None:
+                has_any = any(bool(step.warnings) for step in self._steps.get(s.id, []))
+                if has_warnings != has_any:
+                    return False
+
+            if has_blocks is not None:
+                has_any = any(step.kind == "blocker" for step in self._steps.get(s.id, []))
+                if has_blocks != has_any:
+                    return False
+
+            if q is not None and q.strip():
+                needle = q.strip().lower()
+                fields = [
+                    s.title or "",
+                    ctx.repo_name if ctx and ctx.repo_name else "",
+                    ctx.branch if ctx and ctx.branch else "",
+                    ctx.tag if ctx and ctx.tag else "",
+                ]
+                if not any(needle in v.lower() for v in fields):
+                    return False
+
+            return True
+
+        filtered = [s for s in sessions if matches(s)]
+        return sorted(filtered, key=lambda s: s.created_at, reverse=True)
 
     def get_session(self, session_id: UUID) -> Session | None:
         return self._sessions.get(session_id)
+
+    def update_session_tag(self, session_id: UUID, *, tag: str | None) -> Session | None:
+        session = self._sessions.get(session_id)
+        if session is None:
+            return None
+
+        context = session.context
+        if context is None:
+            context = SessionContext(tag=tag) if tag is not None else None
+        else:
+            context = SessionContext(**context.model_dump(exclude={"tag"}), tag=tag)
+
+        updated = Session(**session.model_dump(exclude={"context"}), context=context)
+        self._sessions[session_id] = updated
+        return updated
+
+    def update_session_context(
+        self, session_id: UUID, *, context: SessionContext | None
+    ) -> Session | None:
+        session = self._sessions.get(session_id)
+        if session is None:
+            return None
+        updated = Session(**session.model_dump(exclude={"context"}), context=context)
+        self._sessions[session_id] = updated
+        return updated
+
+    def get_session_client_id(self, session_id: UUID) -> str | None:
+        client_id = self._session_client_ids.get(session_id)
+        return client_id if isinstance(client_id, str) and client_id.strip() else None
+
+    def get_client_default_repo_root(self, client_id: str) -> str | None:
+        repo_root = self._client_default_repo_roots.get(client_id)
+        return repo_root if isinstance(repo_root, str) and repo_root.strip() else None
+
+    def set_client_default_repo_root(self, client_id: str, *, repo_root: str | None) -> None:
+        cleaned = repo_root.strip() if isinstance(repo_root, str) else ""
+        if not cleaned:
+            self._client_default_repo_roots.pop(client_id, None)
+            return
+        self._client_default_repo_roots[client_id] = cleaned
 
     def session_exists(self, session_id: UUID) -> bool:
         """Check if a session exists without fetching full session data."""
@@ -56,6 +153,7 @@ class MemorySessionStore(SessionStore):
     def delete_session(self, session_id: UUID) -> bool:
         if session_id in self._sessions:
             del self._sessions[session_id]
+            self._session_client_ids.pop(session_id, None)
             if session_id in self._steps:
                 del self._steps[session_id]
             if session_id in self._queues:

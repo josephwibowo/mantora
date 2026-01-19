@@ -7,6 +7,7 @@ import pytest
 from mantora.config.settings import PolicyConfig
 from mantora.policy.sql_guard import (
     SQLClassification,
+    SQLWarning,
     analyze_sql,
     should_block_sql,
 )
@@ -177,3 +178,15 @@ class TestEdgeCases:
 
         result = analyze_sql("\n\tSELECT * FROM users\n")
         assert result.classification == SQLClassification.read_only
+
+
+class TestWarnings:
+    def test_no_limit_warning_suppressed_with_where_clause(self) -> None:
+        result = analyze_sql("SELECT * FROM orders WHERE created_at > '2025-12-29'")
+        assert SQLWarning.SELECT_STAR in result.warnings
+        assert SQLWarning.NO_LIMIT not in result.warnings
+
+    def test_no_limit_warning_emitted_without_where_clause(self) -> None:
+        result = analyze_sql("SELECT * FROM orders")
+        assert SQLWarning.SELECT_STAR in result.warnings
+        assert SQLWarning.NO_LIMIT in result.warnings

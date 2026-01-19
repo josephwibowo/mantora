@@ -14,12 +14,28 @@ class TruncatedText(BaseModel):
     truncated: bool
 
 
+ConfigSource = Literal["cli", "env", "pinned", "roots", "ui", "git", "unknown"]
+
+
+class SessionContext(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    repo_root: str | None = Field(default=None, max_length=500)
+    repo_name: str | None = Field(default=None, max_length=200)
+    branch: str | None = Field(default=None, max_length=200)
+    commit: str | None = Field(default=None, max_length=40)
+    dirty: bool | None = None
+    config_source: ConfigSource = "unknown"
+    tag: str | None = Field(default=None, max_length=200)
+
+
 class Session(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     id: UUID
     title: str | None
     created_at: datetime
+    context: SessionContext | None = None
 
 
 ObservedStepKind = Literal["tool_call", "tool_result", "note", "blocker", "blocker_decision"]
@@ -46,6 +62,8 @@ class ObservedStep(BaseModel):
     risk_level: str | None = None
     # Optional list of warning labels (e.g., ["NO_LIMIT", "SELECT_STAR"])
     warnings: list[str] | None = None
+    # Optional list of tables touched by this step (best-effort; may be partial).
+    tables_touched: list[str] | None = None
 
     # Receipt/trace v1 normalized fields (all optional for backwards compatibility).
     target_type: str | None = None
@@ -73,6 +91,7 @@ class ObservedStep(BaseModel):
 
 class CreateSessionRequest(BaseModel):
     title: str | None = Field(default=None, max_length=200)
+    tag: str | None = Field(default=None, max_length=200)
 
 
 class CreateSessionResponse(BaseModel):
@@ -89,6 +108,7 @@ class AddStepRequest(BaseModel):
     summary: str | None = Field(default=None, max_length=500)
     risk_level: str | None = Field(default=None, max_length=50)
     warnings: list[str] | None = Field(default=None)
+    tables_touched: list[str] | None = Field(default=None)
 
     target_type: str | None = Field(default=None, max_length=50)
     tool_category: StepCategory | None = None
@@ -127,3 +147,6 @@ class SessionSummary(BaseModel):
     blocks: int
     errors: int
     warnings: int
+    duration_ms_total: int | None = None
+    status: Literal["clean", "warnings", "blocked"] | None = None
+    tables_touched: list[str] | None = None

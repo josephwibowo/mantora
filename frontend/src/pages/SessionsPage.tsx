@@ -29,7 +29,7 @@ import BlockIcon from '@mui/icons-material/Block';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { ChangeEvent, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useCreateSession,
   useDeleteSession,
@@ -57,11 +57,26 @@ function formatRelativeTime(dateString: string): string {
 export function SessionsPage() {
   const navigate = useNavigate();
   const theme = useTheme();
-  const { data: sessions, isLoading, error } = useSessions();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const q = searchParams.get('q') ?? '';
+  const hasWarningsParam = searchParams.get('has_warnings');
+  const hasBlocksParam = searchParams.get('has_blocks');
+  const hasWarnings =
+    hasWarningsParam === null ? undefined : hasWarningsParam.toLowerCase() === 'true';
+  const hasBlocks = hasBlocksParam === null ? undefined : hasBlocksParam.toLowerCase() === 'true';
+
+  const {
+    data: sessions,
+    isLoading,
+    error,
+  } = useSessions({
+    q: q.trim() ? q.trim() : undefined,
+    has_warnings: hasWarnings,
+    has_blocks: hasBlocks,
+  });
   const createSession = useCreateSession();
   const deleteSession = useDeleteSession();
   const [title, setTitle] = useState('');
-  const [filter, setFilter] = useState('');
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
@@ -104,10 +119,16 @@ export function SessionsPage() {
     setSessionToDelete(null);
   };
 
-  const filteredSessions = (sessions ?? []).filter(
-    (s) => !filter || s.title?.toLowerCase().includes(filter.toLowerCase()),
-  );
-  const sessionSummaries = useSessionsSummaries(filteredSessions.map((s) => s.id));
+  const updateSearchParams = (updates: Record<string, string | null>) => {
+    const next = new URLSearchParams(searchParams);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === null || value === '') next.delete(key);
+      else next.set(key, value);
+    }
+    setSearchParams(next, { replace: true });
+  };
+
+  const sessionSummaries = useSessionsSummaries((sessions ?? []).map((s) => s.id));
 
   return (
     <Box
@@ -143,11 +164,32 @@ export function SessionsPage() {
             <SearchIcon sx={{ color: 'text.secondary', mr: 1, fontSize: 20 }} />
             <InputBase
               sx={{ flex: 1, fontSize: '0.875rem' }}
-              placeholder='Search sessions...'
-              value={filter}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setFilter(e.target.value)}
+              placeholder='Search repo/branch/tag/title...'
+              value={q}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                updateSearchParams({ q: e.target.value })
+              }
             />
           </Paper>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Chip
+              label='Warnings'
+              size='small'
+              variant={hasWarnings ? 'filled' : 'outlined'}
+              icon={<WarningAmberIcon />}
+              onClick={() => updateSearchParams({ has_warnings: hasWarnings ? null : 'true' })}
+              sx={{ borderRadius: 1.5, textTransform: 'none' }}
+            />
+            <Chip
+              label='Blocked'
+              size='small'
+              variant={hasBlocks ? 'filled' : 'outlined'}
+              icon={<BlockIcon />}
+              onClick={() => updateSearchParams({ has_blocks: hasBlocks ? null : 'true' })}
+              sx={{ borderRadius: 1.5, textTransform: 'none' }}
+            />
+          </Box>
 
           <Box sx={{ flexGrow: 1 }} />
 
@@ -255,7 +297,7 @@ export function SessionsPage() {
                     </Typography>
                   </TableCell>
                 </TableRow>
-              ) : filteredSessions.length === 0 ? (
+              ) : (sessions ?? []).length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5}>
                     <Typography color='text.secondary' sx={{ py: 4, textAlign: 'center' }}>
@@ -264,7 +306,7 @@ export function SessionsPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredSessions.map((s: Session) => (
+                (sessions ?? []).map((s: Session) => (
                   <TableRow
                     key={s.id}
                     hover
@@ -298,6 +340,20 @@ export function SessionsPage() {
                       <Typography variant='body2' fontWeight={600}>
                         {s.title || 'Untitled Session'}
                       </Typography>
+                      {(() => {
+                        const ctx = s.context;
+                        const parts = [ctx?.repo_name, ctx?.branch, ctx?.tag].filter(Boolean);
+                        if (parts.length === 0) return null;
+                        return (
+                          <Typography
+                            variant='caption'
+                            color='text.secondary'
+                            fontFamily='monospace'
+                          >
+                            {parts.join(' • ')}
+                          </Typography>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell>
                       <Chip

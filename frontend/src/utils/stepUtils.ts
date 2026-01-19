@@ -48,6 +48,9 @@ export function extractSqlExcerpt(step: ObservedStep): string | null {
 }
 
 export function extractTableTouched(step: ObservedStep): string | null {
+  if (step.tables_touched && step.tables_touched.length > 0) {
+    return step.tables_touched[0] ?? null;
+  }
   const sql = extractSqlExcerpt(step);
   if (!sql) return null;
   const match = sql.match(/\\bFROM\\s+([a-zA-Z0-9_\\.]+)/i);

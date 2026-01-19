@@ -10,9 +10,22 @@ import {
   List,
   ListItemButton,
   ListItemText,
+  ListSubheader,
   Button,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  Switch,
+  Divider,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
-import DescriptionIcon from '@mui/icons-material/Description';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import DataObjectIcon from '@mui/icons-material/DataObject';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import CloseIcon from '@mui/icons-material/Close';
+import CodeIcon from '@mui/icons-material/Code';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -25,16 +38,22 @@ import {
   useDenyPending,
   usePendingRequests,
   useSession,
+  useSessionReceipt,
+  useSessionRollup,
   useSessions,
   useSteps,
+  useUpdateSessionRepoRoot,
+  useUpdateSessionTag,
 } from '../api/queries';
 import { ApiError } from '../api/client';
 import { BlockerModal } from '../components/BlockerModal';
 import { DashboardLayout } from '../components/Layout/DashboardLayout';
 import { RightPanel } from '../components/RightPanel/RightPanel';
 import { TimelineFeed } from '../components/RightPanel/Timeline/TimelineFeed';
+import { SessionSummaryCard } from '../components/SessionSummaryCard';
 import { SessionStatsBar } from '../components/SessionStatsBar';
 import { EvidenceWorkspace } from '../components/Workspace/EvidenceWorkspace';
+import { copyToClipboard } from '../utils/clipboard';
 import {
   computeStepNarrative,
   extractSqlExcerpt,
@@ -42,6 +61,9 @@ import {
   getStepCategory,
   getStepStatusLabel,
 } from '../utils/stepUtils';
+
+// Store preference key
+const PREF_INCLUDE_DATA = 'mantora.export.includeData';
 
 type StatusFilter = 'all' | 'ok' | 'error' | 'blocked' | 'allowed' | 'denied' | 'timeout';
 
@@ -53,12 +75,16 @@ export function SessionDetailPage() {
   const queryClient = useQueryClient();
   const session = useSession(sessionId);
   const steps = useSteps(sessionId);
+  const rollup = useSessionRollup(sessionId);
   const casts = useCasts(sessionId, { refetchInterval: 10000 });
   const pendingRequests = usePendingRequests(sessionId, {
     refetchInterval: 10000,
   });
   const allowPending = useAllowPending(sessionId);
   const denyPending = useDenyPending(sessionId);
+  const receipt = useSessionReceipt(sessionId);
+  const updateTag = useUpdateSessionTag(sessionId);
+  const updateRepoRoot = useUpdateSessionRepoRoot(sessionId);
 
   // Sidebar data
   const allSessions = useSessions();
@@ -67,6 +93,17 @@ export function SessionDetailPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<StepCategory | 'all'>('all');
   const [searchFilter, setSearchFilter] = useState('');
+
+  // Export state
+  const [exportAnchorEl, setExportAnchorEl] = useState<null | HTMLElement>(null);
+  const [includeData, setIncludeData] = useState(() => {
+    return localStorage.getItem(PREF_INCLUDE_DATA) === 'true';
+  });
+
+  const handleIncludeDataChange = (checked: boolean) => {
+    setIncludeData(checked);
+    localStorage.setItem(PREF_INCLUDE_DATA, String(checked));
+  };
 
   const handleStepSelect = useCallback((stepId: string) => {
     setSelectedStepId(stepId);
@@ -167,9 +204,55 @@ export function SessionDetailPage() {
 
     return {
       ...baseStats,
-      touched_tables: Array.from(tables).sort(),
+      tables_touched: Array.from(tables).sort(),
     };
   }, [stepsData]);
+
+  const handleExportMd = () => {
+    window.location.href = `/api/sessions/${sessionId}/export.md?include_data=${includeData}`;
+  };
+  const handleExportJson = () => {
+    window.location.href = `/api/sessions/${sessionId}/export.json`;
+  };
+  const handleCopyReport = async () => {
+    // If called from card button, use current includeData state
+    await handleCopyForPr(includeData);
+  };
+
+  const handleCopyForPr = async (withData: boolean) => {
+    const res = await receipt.mutateAsync(withData);
+    await copyToClipboard(res.markdown);
+    setExportAnchorEl(null);
+  };
+
+  const handleSaveTag = async (tag: string | null) => {
+    await updateTag.mutateAsync(tag);
+  };
+
+  const handleSaveRepoRoot = async (repoRoot: string | null) => {
+    await updateRepoRoot.mutateAsync(repoRoot);
+  };
+
+  // Timeline Step Actions
+  const handleCopyStepSql = async (step: ObservedStep) => {
+    const sql = extractSqlExcerpt(step);
+    if (!sql) return;
+    await copyToClipboard(sql);
+  };
+
+  const handleCopyStepJson = async (step: ObservedStep) => {
+    await copyToClipboard(JSON.stringify(step, null, 2));
+  };
+
+  const handleExportStepJson = (step: ObservedStep) => {
+    const blob = new Blob([JSON.stringify(step, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `step-${step.id}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   // -- Sidebar Component --
   const Sidebar = (
@@ -216,19 +299,80 @@ export function SessionDetailPage() {
 
   // -- Main Content (Evidence Workspace) --
   const Main = (
-    <EvidenceWorkspace
-      step={selectedStep}
-      cast={activeCast}
-      pendingRequest={activePendingRequest}
-      onAllow={(id) => allowPending.mutate(id)}
-      onDeny={(id) => denyPending.mutate(id)}
-      isDecisionLoading={allowPending.isPending || denyPending.isPending}
-    />
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {session.data && (
+        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.default' }}>
+          <SessionSummaryCard
+            key={`${session.data.id}-${session.data.context?.repo_root ?? ''}-${session.data.context?.tag ?? ''}`}
+            session={session.data}
+            rollup={rollup.data ?? null}
+            isLoading={rollup.isLoading}
+            onCopyForPr={handleCopyReport}
+            // onExportJson={handleExportJson} // Removed JSON button
+            onSaveRepoRoot={handleSaveRepoRoot}
+            onSaveTag={handleSaveTag}
+            isCopying={receipt.isPending}
+            isSavingRepoRoot={updateRepoRoot.isPending}
+            isSavingTag={updateTag.isPending}
+          />
+        </Box>
+      )}
+      <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
+        <EvidenceWorkspace
+          step={selectedStep}
+          cast={activeCast}
+          pendingRequest={activePendingRequest}
+          onAllow={(id) => allowPending.mutate(id)}
+          onDeny={(id) => denyPending.mutate(id)}
+          isDecisionLoading={allowPending.isPending || denyPending.isPending}
+        />
+      </Box>
+    </Box>
   );
 
   // -- Right Panel (Timeline) --
   const Right = (
     <RightPanel
+      headerContent={
+        selectedStep ? (
+          <Stack
+            direction='row'
+            alignItems='center'
+            justifyContent='space-between'
+            sx={{ minHeight: 24 }}
+          >
+            <Stack direction='row' spacing={1} alignItems='center'>
+              <Typography variant='overline' fontWeight={700} color='text.primary'>
+                STEP ACTION
+              </Typography>
+            </Stack>
+            <Stack direction='row' spacing={0.5}>
+              {extractSqlExcerpt(selectedStep) && (
+                <Tooltip title='Copy SQL'>
+                  <IconButton size='small' onClick={() => handleCopyStepSql(selectedStep)}>
+                    <CodeIcon fontSize='small' />
+                  </IconButton>
+                </Tooltip>
+              )}
+              <Tooltip title='Copy Step JSON'>
+                <IconButton size='small' onClick={() => handleCopyStepJson(selectedStep)}>
+                  <ContentCopyIcon fontSize='small' />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title='Export Step JSON'>
+                <IconButton size='small' onClick={() => handleExportStepJson(selectedStep)}>
+                  <FileDownloadIcon fontSize='small' />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title='Clear selection'>
+                <IconButton size='small' onClick={() => setSelectedStepId(null)}>
+                  <CloseIcon fontSize='small' />
+                </IconButton>
+              </Tooltip>
+            </Stack>
+          </Stack>
+        ) : undefined
+      }
       controls={
         <Stack spacing={1}>
           <Stack direction='row' spacing={1} sx={{ flexWrap: 'wrap' }}>
@@ -353,13 +497,6 @@ export function SessionDetailPage() {
     return <Alert severity='error'>{(session.error as Error).message}</Alert>;
   }
 
-  const handleExportMd = () => {
-    window.location.href = `/api/sessions/${sessionId}/export.md`;
-  };
-  const handleExportJson = () => {
-    window.location.href = `/api/sessions/${sessionId}/export.json`;
-  };
-
   return (
     <>
       <DashboardLayout
@@ -368,25 +505,78 @@ export function SessionDetailPage() {
           steps: stepsData,
           showBack: true,
           actions: (
-            <Stack direction='row' spacing={1}>
-              <Button
-                startIcon={<DescriptionIcon />}
-                variant='outlined'
-                size='small'
-                onClick={handleExportMd}
-                sx={{ borderColor: 'divider', color: 'text.secondary' }}
-              >
-                Export Receipt
-              </Button>
+            <>
               <Button
                 variant='outlined'
                 size='small'
-                onClick={handleExportJson}
-                sx={{ borderColor: 'divider', color: 'text.secondary' }}
+                endIcon={<KeyboardArrowDownIcon />}
+                onClick={(e) => setExportAnchorEl(e.currentTarget)}
+                sx={{
+                  borderColor: 'divider',
+                  color: 'text.secondary',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                }}
               >
-                Export JSON
+                Export
               </Button>
-            </Stack>
+              <Menu
+                anchorEl={exportAnchorEl}
+                open={Boolean(exportAnchorEl)}
+                onClose={() => setExportAnchorEl(null)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                PaperProps={{ sx: { minWidth: 220, mt: 1 } }}
+              >
+                <MenuItem onClick={() => handleIncludeDataChange(!includeData)}>
+                  <ListItemIcon>
+                    <Switch
+                      size='small'
+                      checked={includeData}
+                      onChange={(e) => handleIncludeDataChange(e.target.checked)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </ListItemIcon>
+                  <ListItemText primary='Include sample data' />
+                </MenuItem>
+
+                <Divider />
+                <ListSubheader sx={{ lineHeight: '32px' }}>Report</ListSubheader>
+
+                <MenuItem onClick={() => handleCopyForPr(includeData)}>
+                  <ListItemIcon>
+                    <ContentCopyIcon fontSize='small' />
+                  </ListItemIcon>
+                  <ListItemText primary='Copy report (Markdown)' />
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    handleExportMd();
+                    setExportAnchorEl(null);
+                  }}
+                >
+                  <ListItemIcon>
+                    <FileDownloadIcon fontSize='small' />
+                  </ListItemIcon>
+                  <ListItemText primary='Download report (.md)' />
+                </MenuItem>
+
+                <Divider />
+                <ListSubheader sx={{ lineHeight: '32px' }}>Data</ListSubheader>
+
+                <MenuItem
+                  onClick={() => {
+                    handleExportJson();
+                    setExportAnchorEl(null);
+                  }}
+                >
+                  <ListItemIcon>
+                    <DataObjectIcon fontSize='small' />
+                  </ListItemIcon>
+                  <ListItemText primary='Download session JSON' />
+                </MenuItem>
+              </Menu>
+            </>
           ),
         }}
         subheader={<SessionStatsBar summary={summary} />}

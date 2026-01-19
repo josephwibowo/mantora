@@ -6,10 +6,21 @@ export type TruncatedText = {
 export type StepCategory = 'query' | 'schema' | 'list' | 'cast' | 'unknown';
 export type StepDecision = 'pending' | 'allowed' | 'denied' | 'timeout';
 
+export type SessionContext = {
+  repo_root?: string | null;
+  repo_name?: string | null;
+  branch?: string | null;
+  commit?: string | null;
+  dirty?: boolean | null;
+  config_source?: 'cli' | 'env' | 'pinned' | 'roots' | 'ui' | 'git' | 'unknown';
+  tag?: string | null;
+};
+
 export type Session = {
   id: string;
   title: string | null;
   created_at: string;
+  context?: SessionContext | null;
 };
 
 export type ObservedStep = {
@@ -26,6 +37,7 @@ export type ObservedStep = {
   summary?: string | null;
   risk_level?: string | null;
   warnings?: string[] | null;
+  tables_touched?: string[] | null;
 
   // Receipt/trace v1 (optional for backwards compatibility)
   target_type?: string | null;
@@ -93,7 +105,15 @@ export type SessionSummary = {
   errors: number;
   warnings: number;
   approvals?: number;
-  touched_tables?: string[];
+  duration_ms_total?: number | null;
+  status?: 'clean' | 'warnings' | 'blocked' | null;
+  tables_touched?: string[] | null;
+};
+
+export type ReceiptResult = {
+  markdown: string;
+  truncated: boolean;
+  included_data: boolean;
 };
 
 export type PolicyRule = {

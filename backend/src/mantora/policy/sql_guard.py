@@ -153,9 +153,15 @@ def _detect_select_star(sql: str) -> bool:
 
 
 def _detect_no_limit(sql: str) -> bool:
-    """Detect if SELECT query has no LIMIT clause."""
+    """Detect if SELECT query has no LIMIT clause.
+
+    V0 heuristic: if a WHERE clause is present, we do not warn for lack of LIMIT.
+    This reduces noise for common filtered exploration queries.
+    """
     upper_sql = sql.upper()
     if not re.search(r"\bSELECT\b", upper_sql):
+        return False
+    if re.search(r"\bWHERE\b", upper_sql):
         return False
     return not re.search(r"\bLIMIT\b", upper_sql)
 

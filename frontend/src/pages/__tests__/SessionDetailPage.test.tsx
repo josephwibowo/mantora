@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi, type Mock } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { beforeEach, describe, it, expect, vi, type Mock } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SessionDetailPage } from '../SessionDetailPage';
@@ -17,6 +17,9 @@ vi.mock('../../api/queries', async () => {
     useAllowPending: vi.fn(),
     useDenyPending: vi.fn(),
     useSessions: vi.fn(), // for sidebar
+    useSessionReceipt: vi.fn(),
+    useUpdateSessionTag: vi.fn(),
+    useUpdateSessionRepoRoot: vi.fn(),
   };
 });
 
@@ -31,7 +34,13 @@ const queryClient = new QueryClient({
 const renderPage = (sessionId = '123') => {
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[`/sessions/${sessionId}`]}>
+      <MemoryRouter
+        initialEntries={[`/sessions/${sessionId}`]}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
         <Routes>
           <Route path='/sessions/:sessionId' element={<SessionDetailPage />} />
         </Routes>
@@ -41,9 +50,40 @@ const renderPage = (sessionId = '123') => {
 };
 
 describe('SessionDetailPage', () => {
+  beforeEach(() => {
+    (Queries.useUpdateSessionTag as Mock).mockReturnValue({
+      isPending: false,
+      mutateAsync: vi.fn(),
+    });
+    (Queries.useUpdateSessionRepoRoot as Mock).mockReturnValue({
+      isPending: false,
+      mutateAsync: vi.fn(),
+    });
+    (Queries.useSessionReceipt as Mock).mockReturnValue({
+      isPending: false,
+      mutateAsync: vi.fn(),
+    });
+    (Queries.useAllowPending as Mock).mockReturnValue({ isPending: false, mutate: vi.fn() });
+    (Queries.useDenyPending as Mock).mockReturnValue({ isPending: false, mutate: vi.fn() });
+    (Queries.useSessions as Mock).mockReturnValue({ data: [] });
+  });
+
   it('renders loading state initially', () => {
     (Queries.useSession as Mock).mockReturnValue({ isLoading: true });
     (Queries.useSteps as Mock).mockReturnValue({ isLoading: true });
+    (Queries.useCasts as Mock).mockReturnValue({ isLoading: true });
+    (Queries.usePendingRequests as Mock).mockReturnValue({ isLoading: true });
+    (Queries.useSessionReceipt as Mock).mockReturnValue({ isLoading: true, mutateAsync: vi.fn() });
+    (Queries.useUpdateSessionTag as Mock).mockReturnValue({
+      isLoading: true,
+      mutateAsync: vi.fn(),
+    });
+    (Queries.useUpdateSessionRepoRoot as Mock).mockReturnValue({
+      isLoading: true,
+      mutateAsync: vi.fn(),
+    });
+    (Queries.useAllowPending as Mock).mockReturnValue({ isPending: false, mutate: vi.fn() });
+    (Queries.useDenyPending as Mock).mockReturnValue({ isPending: false, mutate: vi.fn() });
     (Queries.useSessions as Mock).mockReturnValue({ data: [] });
 
     renderPage();
@@ -100,5 +140,59 @@ describe('SessionDetailPage', () => {
     renderPage();
 
     expect(await screen.findByText('Session Not Found')).toBeInTheDocument();
+  });
+
+  it('renders export buttons and menu correctly', async () => {
+    (Queries.useSession as Mock).mockReturnValue({
+      isLoading: false,
+      data: {
+        id: '123',
+        title: 'My Session',
+        created_at: new Date().toISOString(),
+      },
+    });
+    (Queries.useSteps as Mock).mockReturnValue({
+      isLoading: false,
+      data: [],
+    });
+    (Queries.useCasts as Mock).mockReturnValue({ data: [] });
+    (Queries.usePendingRequests as Mock).mockReturnValue({ data: [] });
+    (Queries.useAllowPending as Mock).mockReturnValue({ isPending: false });
+    (Queries.useDenyPending as Mock).mockReturnValue({ isPending: false });
+    (Queries.useSessions as Mock).mockReturnValue({ data: [] });
+    (Queries.useSessionReceipt as Mock).mockReturnValue({
+      isPending: false,
+      mutateAsync: vi.fn(),
+    });
+    (Queries.useUpdateSessionTag as Mock).mockReturnValue({
+      isLoading: false,
+      mutateAsync: vi.fn(),
+    });
+    (Queries.useUpdateSessionRepoRoot as Mock).mockReturnValue({
+      isLoading: false,
+      mutateAsync: vi.fn(),
+    });
+
+    renderPage();
+
+    await screen.findByText('My Session');
+
+    // Check Session Summary buttons
+    expect(screen.getByText('Copy report (.md)')).toBeInTheDocument();
+    expect(screen.queryByText('Export JSON')).not.toBeInTheDocument();
+    expect(screen.queryByText('More export options…')).not.toBeInTheDocument();
+
+    // Check App Bar Export button
+    const exportBtn = screen.getByText('Export');
+    expect(exportBtn).toBeInTheDocument();
+
+    // Open dropdown
+    fireEvent.click(exportBtn);
+    expect(screen.getByText('Report')).toBeInTheDocument(); // Header
+    expect(screen.getByText('Copy report (Markdown)')).toBeInTheDocument();
+    expect(screen.getByText('Download report (.md)')).toBeInTheDocument();
+    expect(screen.getByText('Data')).toBeInTheDocument(); // Header
+    expect(screen.getByText('Download session JSON')).toBeInTheDocument();
+    expect(screen.getByText('Include sample data')).toBeInTheDocument();
   });
 });
