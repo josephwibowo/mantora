@@ -196,25 +196,15 @@ def analyze_sql(sql: str) -> SQLGuardResult:
             reason="Empty SQL",
         )
 
+    # Import here to avoid circular dependency
+    from mantora.policy.linter import lint_sql
+
     is_multi = _detect_multi_statement(sql)
     classification = _classify_sql(sql)
     delete_without_where = _detect_delete_without_where(sql)
 
-    # Collect all warnings
-    warnings: list[SQLWarning] = []
-
-    if is_multi:
-        warnings.append(SQLWarning.MULTI_STATEMENT)
-    if _detect_select_star(sql):
-        warnings.append(SQLWarning.SELECT_STAR)
-    if _detect_no_limit(sql):
-        warnings.append(SQLWarning.NO_LIMIT)
-    if delete_without_where:
-        warnings.append(SQLWarning.DELETE_NO_WHERE)
-    if _detect_ddl(sql):
-        warnings.append(SQLWarning.DDL)
-    if _detect_dml(sql):
-        warnings.append(SQLWarning.DML)
+    # Use linter for detailed warnings (sqlglot-based when available)
+    warnings = lint_sql(sql)
 
     reason = None
     if is_multi:
