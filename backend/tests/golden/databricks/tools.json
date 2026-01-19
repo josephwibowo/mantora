@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "target_type": "databricks",
+  "tools": [
+    {
+      "name": "query",
+      "description": "Execute a SQL statement in Databricks SQL",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "sql": { "type": "string" } },
+        "required": ["sql"]
+      }
+    },
+    {
+      "name": "list_catalogs",
+      "description": "List catalogs",
+      "inputSchema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "list_tables",
+      "description": "List tables in a schema",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "catalog": { "type": "string" }, "schema": { "type": "string" } }
+      }
+    },
+    {
+      "name": "describe_table",
+      "description": "Describe a table",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "catalog": { "type": "string" },
+          "schema": { "type": "string" },
+          "table": { "type": "string" }
+        },
+        "required": ["table"]
+      }
+    }
+  ]
+}
+

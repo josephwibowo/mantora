@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "tool_name": "get_table_info",
+  "arguments": {
+    "project_id": "<redacted_project_id>",
+    "dataset_id": "test_dataset",
+    "table_id": "restricted_table"
+  },
+  "result": {
+    "content": [{ "type": "text", "text": "Permission denied: Access to table denied" }],
+    "structuredContent": null,
+    "isError": true
+  },
+  "is_error": true,
+  "error_message": "Permission denied: Access to table denied",
+  "expected": {
+    "category": "schema",
+    "evidence": {
+      "project_id": "<redacted_project_id>",
+      "dataset_id": "test_dataset",
+      "table": "restricted_table"
+    }
+  }
+}
+

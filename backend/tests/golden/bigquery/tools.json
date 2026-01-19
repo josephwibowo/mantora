@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "target_type": "bigquery",
+  "tools": [
+    {
+      "name": "execute_sql",
+      "description": "Run a SQL query (SELECT statements only)",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "sql": { "type": "string" } },
+        "required": ["sql"]
+      }
+    },
+    {
+      "name": "list_dataset_ids",
+      "description": "List BigQuery dataset IDs in a Google Cloud project",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "project_id": { "type": "string" } },
+        "required": ["project_id"]
+      }
+    },
+    {
+      "name": "list_table_ids",
+      "description": "List table IDs in a BigQuery dataset",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project_id": { "type": "string" },
+          "dataset_id": { "type": "string" }
+        },
+        "required": ["project_id", "dataset_id"]
+      }
+    },
+    {
+      "name": "get_table_info",
+      "description": "Get metadata information about a BigQuery table",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project_id": { "type": "string" },
+          "dataset_id": { "type": "string" },
+          "table_id": { "type": "string" }
+        },
+        "required": ["project_id", "dataset_id", "table_id"]
+      }
+    }
+  ]
+}
+

@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "tool_name": "query",
+  "arguments": { "sql": "SELEC 1" },
+  "result": {
+    "content": [{ "type": "text", "text": "SQL compilation error: syntax error line 1 at position 0 unexpected 'SELEC'." }],
+    "structuredContent": null,
+    "isError": true
+  },
+  "is_error": true,
+  "error_message": "SQL compilation error: syntax error line 1 at position 0 unexpected 'SELEC'.",
+  "expected": { "category": "query", "evidence": { "sql": "SELEC 1" } }
+}
+

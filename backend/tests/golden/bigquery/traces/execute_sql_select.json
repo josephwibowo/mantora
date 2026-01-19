@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "tool_name": "execute_sql",
+  "arguments": { "sql": "SELECT 1 AS one" },
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"columns\":[\"one\"],\"rows\":[[1]],\"row_count\":1}"
+      }
+    ],
+    "structuredContent": null,
+    "isError": false
+  },
+  "is_error": false,
+  "error_message": null,
+  "expected": { "category": "query", "evidence": { "sql": "SELECT 1 AS one" } }
+}
+

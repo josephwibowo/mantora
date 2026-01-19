@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "tool_name": "describe_table",
+  "arguments": { "database": "DEMO_DB", "schema": "PUBLIC", "table": "USERS" },
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"table\":\"USERS\",\"columns\":[{\"name\":\"ID\",\"type\":\"NUMBER\"},{\"name\":\"EMAIL\",\"type\":\"VARCHAR\"}]}"
+      }
+    ],
+    "structuredContent": null,
+    "isError": false
+  },
+  "is_error": false,
+  "error_message": null,
+  "expected": { "category": "schema", "evidence": { "table": "USERS", "schema_name": "PUBLIC" } }
+}
+

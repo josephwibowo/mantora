@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "tool_name": "describe_table",
+  "arguments": { "catalog": "main", "schema": "default", "table": "users" },
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"table\":\"users\",\"columns\":[{\"name\":\"id\",\"type\":\"BIGINT\"},{\"name\":\"email\",\"type\":\"STRING\"}]}"
+      }
+    ],
+    "structuredContent": null,
+    "isError": false
+  },
+  "is_error": false,
+  "error_message": null,
+  "expected": {
+    "category": "schema",
+    "evidence": { "table": "users", "schema_name": "default", "catalog_name": "main" }
+  }
+}
+

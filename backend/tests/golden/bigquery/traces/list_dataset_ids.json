@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "tool_name": "list_dataset_ids",
+  "arguments": { "project_id": "<redacted_project_id>" },
+  "result": {
+    "content": [
+      { "type": "text", "text": "{\"datasets\":[\"test_dataset\"],\"count\":1}" }
+    ],
+    "structuredContent": null,
+    "isError": false
+  },
+  "is_error": false,
+  "error_message": null,
+  "expected": {
+    "category": "list",
+    "evidence": { "project_id": "<redacted_project_id>", "list_type": "datasets" }
+  }
+}
+

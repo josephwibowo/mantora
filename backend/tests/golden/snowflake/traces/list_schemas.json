@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "tool_name": "list_schemas",
+  "arguments": { "database": "DEMO_DB" },
+  "result": {
+    "content": [{ "type": "text", "text": "{\"schemas\":[\"PUBLIC\"],\"count\":1}" }],
+    "structuredContent": null,
+    "isError": false
+  },
+  "is_error": false,
+  "error_message": null,
+  "expected": { "category": "list", "evidence": { "list_type": "schemas" } }
+}
+

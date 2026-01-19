@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "tool_name": "execute_sql",
+  "arguments": { "sql": "SELEC * FROM users" },
+  "result": {
+    "content": [{ "type": "text", "text": "Syntax error: Unexpected keyword SELEC" }],
+    "structuredContent": null,
+    "isError": true
+  },
+  "is_error": true,
+  "error_message": "Syntax error: Unexpected keyword SELEC",
+  "expected": { "category": "query", "evidence": { "sql": "SELEC * FROM users" } }
+}
+
