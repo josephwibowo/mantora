@@ -141,3 +141,30 @@ From `backend/`:
 - `uv run uvicorn mantora.app:app --port 8000`
 
 When `frontend/dist` exists, the backend serves it from `/`.
+
+## Testing
+
+Mantora uses `pytest` for backend tests and `vitest` for frontend tests.
+
+### Running Backend Tests
+```bash
+make test-be
+# or
+cd backend && uv run pytest
+```
+
+### Running Frontend Tests
+```bash
+make test-fe
+# or
+cd frontend && npx vitest run
+```
+
+### Linting & Formatting
+Use the Makefile to ensure your code meets the project standards:
+```bash
+make lint-be   # Backend lint (ruff, mypy)
+make format-be # Backend format
+make lint-fe   # Frontend lint
+make format-fe # Frontend format
+```
