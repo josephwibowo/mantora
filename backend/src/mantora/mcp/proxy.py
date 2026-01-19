@@ -41,7 +41,7 @@ from mantora.mcp.tools import CastTools, SessionTools
 from mantora.models.events import ObservedStep, SessionContext, TruncatedText
 from mantora.policy.allowlist import is_tool_known_safe
 from mantora.policy.blocker import PendingDecision, PendingRequest, PendingStatus, blocker_summary
-from mantora.policy.linter import extract_tables_touched
+from mantora.policy.linter import extract_tables_touched, lint_sql
 from mantora.policy.sql_guard import SQLGuardResult, SQLWarning, analyze_sql, should_block_sql
 from mantora.policy.truncation import cap_text
 from mantora.store import SessionStore
@@ -510,8 +510,11 @@ class MCPProxy:
             guard_result = analyze_sql(sql_for_analysis)
             sql_classification = guard_result.classification.value
             risk_level = guard_result.risk_level.value
-            if guard_result.warnings:
-                warnings = [w.value for w in guard_result.warnings]
+
+            # Use improved linter for warnings (uses sqlglot if available)
+            lint_warnings = lint_sql(sql_for_analysis)
+            if lint_warnings:
+                warnings = [w.value for w in lint_warnings]
             tables_touched = extract_tables_touched(sql_for_analysis)
 
         # Create preview text from result
