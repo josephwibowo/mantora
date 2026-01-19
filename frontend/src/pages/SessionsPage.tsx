@@ -59,6 +59,10 @@ export function SessionsPage() {
   const theme = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
   const q = searchParams.get('q') ?? '';
+  const tag = searchParams.get('tag') ?? undefined;
+  const repoName = searchParams.get('repo_name') ?? undefined;
+  const branch = searchParams.get('branch') ?? undefined;
+
   const hasWarningsParam = searchParams.get('has_warnings');
   const hasBlocksParam = searchParams.get('has_blocks');
   const hasWarnings =
@@ -71,6 +75,9 @@ export function SessionsPage() {
     error,
   } = useSessions({
     q: q.trim() ? q.trim() : undefined,
+    tag,
+    repo_name: repoName,
+    branch,
     has_warnings: hasWarnings,
     has_blocks: hasBlocks,
   });
@@ -146,7 +153,7 @@ export function SessionsPage() {
         sx={{ py: 4, flexGrow: 1, display: 'flex', flexDirection: 'column' }}
       >
         {/* Toolbar */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, flexWrap: 'wrap' }}>
           <Paper
             elevation={0}
             variant='outlined'
@@ -164,7 +171,7 @@ export function SessionsPage() {
             <SearchIcon sx={{ color: 'text.secondary', mr: 1, fontSize: 20 }} />
             <InputBase
               sx={{ flex: 1, fontSize: '0.875rem' }}
-              placeholder='Search repo/branch/tag/title...'
+              placeholder='Search sessions...'
               value={q}
               onChange={(e: ChangeEvent<HTMLInputElement>) =>
                 updateSearchParams({ q: e.target.value })
@@ -172,7 +179,7 @@ export function SessionsPage() {
             />
           </Paper>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
             <Chip
               label='Warnings'
               size='small'
@@ -189,6 +196,33 @@ export function SessionsPage() {
               onClick={() => updateSearchParams({ has_blocks: hasBlocks ? null : 'true' })}
               sx={{ borderRadius: 1.5, textTransform: 'none' }}
             />
+            {repoName && (
+              <Chip
+                label={`Repo: ${repoName}`}
+                size='small'
+                variant='filled'
+                onDelete={() => updateSearchParams({ repo_name: null })}
+                sx={{ borderRadius: 1.5, textTransform: 'none', maxWidth: 200 }}
+              />
+            )}
+            {branch && (
+              <Chip
+                label={`Branch: ${branch}`}
+                size='small'
+                variant='filled'
+                onDelete={() => updateSearchParams({ branch: null })}
+                sx={{ borderRadius: 1.5, textTransform: 'none', maxWidth: 200 }}
+              />
+            )}
+            {tag && (
+              <Chip
+                label={`Tag: ${tag}`}
+                size='small'
+                variant='filled'
+                onDelete={() => updateSearchParams({ tag: null })}
+                sx={{ borderRadius: 1.5, textTransform: 'none', maxWidth: 200 }}
+              />
+            )}
           </Box>
 
           <Box sx={{ flexGrow: 1 }} />
@@ -340,20 +374,65 @@ export function SessionsPage() {
                       <Typography variant='body2' fontWeight={600}>
                         {s.title || 'Untitled Session'}
                       </Typography>
-                      {(() => {
-                        const ctx = s.context;
-                        const parts = [ctx?.repo_name, ctx?.branch, ctx?.tag].filter(Boolean);
-                        if (parts.length === 0) return null;
-                        return (
-                          <Typography
-                            variant='caption'
-                            color='text.secondary'
-                            fontFamily='monospace'
-                          >
-                            {parts.join(' • ')}
-                          </Typography>
-                        );
-                      })()}
+                      {/* Context metadata (clickable) */}
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 0.5 }}>
+                        {s.context?.repo_name && (
+                          <Chip
+                            label={s.context.repo_name}
+                            size='small'
+                            variant='outlined'
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateSearchParams({ repo_name: s.context?.repo_name ?? null });
+                            }}
+                            sx={{
+                              height: 20,
+                              fontSize: '0.7rem',
+                              cursor: 'pointer',
+                              fontFamily: 'monospace',
+                              bgcolor: 'background.paper',
+                            }}
+                          />
+                        )}
+                        {s.context?.branch && (
+                          <Chip
+                            label={s.context.branch}
+                            size='small'
+                            variant='outlined'
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateSearchParams({ branch: s.context?.branch ?? null });
+                            }}
+                            sx={{
+                              height: 20,
+                              fontSize: '0.7rem',
+                              cursor: 'pointer',
+                              fontFamily: 'monospace',
+                              bgcolor: 'background.paper',
+                            }}
+                          />
+                        )}
+                        {s.context?.tag && (
+                          <Chip
+                            label={s.context.tag}
+                            size='small'
+                            variant='outlined'
+                            color='primary'
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateSearchParams({ tag: s.context?.tag ?? null });
+                            }}
+                            sx={{
+                              height: 20,
+                              fontSize: '0.7rem',
+                              cursor: 'pointer',
+                              fontFamily: 'monospace',
+                              bgcolor: 'primary.50',
+                              border: 'none',
+                            }}
+                          />
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell>
                       <Chip
