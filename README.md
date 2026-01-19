@@ -1,216 +1,125 @@
-# Mantora
+# Mantora 🛡️
 
-The Firewall for AI Agents. Prevent DROP TABLE and get a receipt for every SQL query your LLM runs.
+> **The open-source run log for MCP agents.**
+> Get a shareable report to verify and reproduce what the agent did — **plus a protective mode for common dangerous SQL.**
 
-Claude Code / Cursor → Mantora (UI + MCP wrapper) → target MCP server (DuckDB/Postgres/etc.)
+[![PyPI](https://img.shields.io/pypi/v/mantora)](https://pypi.org/project/mantora/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-![Mantora Demo](docs/assets/demo.gif)
+![Mantora UI screenshot](docs/assets/demo.gif)
 
-## How it works
-Mantora sits between your LLM client (Claude/Cursor) and the target MCP server. It intercepts JSON-RPC messages to log traffic and enforce safety policies.
+Mantora focuses on making agent behavior **reviewable and repeatable**. It records the key evidence from each session and turns it into a Markdown report. Protective mode adds basic guardrails (block/warn rules) so you don’t learn about a bad query the hard way.
 
-*   **Mode A (Recommended UX):** `mantora mcp --connector duckdb --db ...` runs DuckDB directly (Mantora spawns the official server process).
-*   **Mode B (Proxy mode):** Mantora *wraps* a separately spawned MCP server process (configured via `config.toml` target command).
+## What you get
+- **🔍 Session Logs:** Capture the exact SQL and tool calls an agent makes for easy verification.
+- **🧾 Shareable Reports:** One-click to generate a Markdown summary of the session for Pull Requests or Slack.
+- **🛡️ Protective Mode:** Basic guardrails that block or warn on destructive SQL patterns by default.
 
-Connectors/adapters are target-specific (DuckDB, Postgres, Snowflake, BigQuery, Databricks) and are used for:
-- tool categorization (`query|schema|list|cast|unknown`)
-- SQL extraction for receipts/trace
-- conservative unknown-tool handling in protective mode
+## Quick Start
 
-
-## Quickstart (DuckDB local, zero credentials)
-
-**Prereqs:** Python 3.12+ and either `pipx` or `uv tool`.
-
-### 1) Install (choose one)
-
-**Install (recommended)**
-
+### 1. Install
 ```bash
-pipx install "mantora[duckdb]"
-# or: "mantora[postgres]", "mantora[all]"
-```
-or
-```bash
-uv tool install "mantora[duckdb]"
-# or: "mantora[postgres]", "mantora[all]"
+pipx install "mantora[duckdb,postgres]"
 ```
 
-### 2) Load demo data (optional)
+### 2. Run the Recorder (UI)
 
-```bash
-mantora demo duckdb --db ./demo.duckdb
-```
-
-### 3) Start Mantora (UI)
+Start the dashboard to see your sessions in real-time:
 
 ```bash
 mantora up
-# opens UI at http://localhost:3030
-# Ctrl+C to stop
 ```
 
-> [!WARNING]
-> **Sessions not showing up?**
-> If you run the **UI** (`mantora up`) and the **MCP Proxy** in separate terminals (or one in Cursor/Claude), make sure they point to the **same** `sessions.db`.
-> Set `MANTORA_STORAGE__SQLITE__PATH=/path/to/sessions.db` for both, or use a shared `config.toml`.
+### 3. Connect Your Agent
 
-### 4) Connect
-**Option A: Claude Desktop / Cursor (`mcp.json`)**
+Configure your MCP client (e.g., `claude_desktop_config.json`) to route through Mantora.
 
-Add this to your `mcp.json` (or `claude_desktop_config.json`):
+**For DuckDB:**
 
 ```json
 {
   "mcpServers": {
-    "mantora": {
+    "my-db": {
       "command": "mantora",
-      "args": ["mcp", "--connector", "duckdb", "--db", "/absolute/path/to/demo.duckdb"]
+      "args": ["connect", "--type", "duckdb", "--db-path", "./my_data.db"]
     }
   }
 }
 ```
 
-> **Note**: Replace `/absolute/path/to/demo.duckdb` with the full path to your database file.
+### How it works
 
-**Option B: Claude Code (CLI)**
+```mermaid
+sequenceDiagram
+    participant Agent as Claude/Cursor
+    participant Mantora as Mantora 🛡️
+    participant DB as Postgres/DuckDB
 
-```bash
-claude config mcp add mantora -- mantora mcp --connector duckdb --db ./demo.duckdb
+    Agent->>Mantora: "SELECT * FROM users"
+    Note over Mantora: 1. Check Safety Policy
+    Mantora->>DB: Execute Query
+    DB-->>Mantora: Return Rows
+    Note over Mantora: 2. Log Report (Async)
+    Mantora-->>Agent: Relay Result
 ```
 
+## Daily Workflow
 
-### 5) Try it out
+### 📋 Copy a PR Report
 
-Try this prompt in Cursor/Claude:
-> “Show me the top 10 customers by revenue from the last 14 days. Then try to delete all rows from users.”
+Don't paste messy screenshots. In the Session Summary, click **"Copy for GitHub"**.
 
-## Quickstart (Postgres local via Docker)
+* **Result:** A collapsible `<details>` block containing the SQL, execution time, and safety checks. Perfect for Pull Requests.
 
-**Prereqs:** Docker installed.
+### 🛑 Review Blocked Mutations
 
-```bash
-mantora demo postgres
-mantora up
-```
+If an agent tries to `DROP TABLE users`, Mantora intercepts it.
 
-If you want to use Mantora as an MCP proxy for Postgres too, install the Postgres connector:
+* **The Agent sees:** "Error: Action blocked by safety policy."
+* **You see:** A red entry in the Mantora UI with the exact SQL that was blocked.
 
-```bash
-pipx install "mantora[postgres]"
-# or "mantora[all]"
-```
+### 📤 Export Evidence
 
-Claude Desktop MCP entry:
+Need to archive a session?
 
-```json
-{
-  "mcpServers": {
-    "postgres": {
-      "command": "mantora",
-      "args": ["mcp", "--connector", "postgres", "--dsn", "postgresql://mantora:mantora@localhost:5432/mantora_demo"]
-    }
-  }
-}
-```
+* **Export JSON:** Get the raw trace data.
+* **Download Markdown:** Get a readable log of the entire conversation.
 
-## Config
+## Safety Defaults
 
-Mantora acts as a transparent proxy by default, but you can configure safety rules (e.g., blocking `DELETE`), session storage paths, and data retention limits using a `config.toml`.
+Mantora is designed to be **read-only safe** out of the box.
 
-Mantora searches for this file in the following locations (in order):
+| Action | Default Policy |
+| --- | --- |
+| `SELECT` | ✅ Allowed |
+| `INSERT`, `UPDATE` | ⚠️ Requires Approval (Configurable) |
+| `DELETE` (with WHERE) | ⚠️ Requires Approval |
+| `DROP`, `TRUNCATE` | 🛑 Blocked |
+| `DELETE` (no WHERE) | 🛑 Blocked |
 
-1.  Passed via CLI: `mantora up --config ./my_config.toml`
-2.  Local directory: `./config.toml`
-3.  User-global config (platform specific):
-    - macOS: `~/Library/Application Support/mantora/config.toml`
-    - Linux: `~/.config/mantora/config.toml`
-    - Windows: `%APPDATA%\\mantora\\config.toml`
+*Want to change this? See [Configuration](docs/configuration.md).*
 
-**Note**: Mantora does **not** create a config file automatically. If no config is found, it uses sensible defaults (Protective Mode: ON, SQLite storage: `~/.mantora/sessions.db`).
+## Supported Data Stores
 
-See [`config.toml.example`](config.toml.example) in this repository for a starting point.
+* **DuckDB** (Local files, MotherDuck)
+* **Postgres** (Direct connection, Supabase, Neon)
+* **BigQuery, Snowflake, Databricks** (***Coming Soon***)
 
-Additional knobs:
-- `limits.max_db_bytes` (0 disables) to prune old sessions when the SQLite file grows too large.
-- `cors_allow_origins` to customize which UI origins can call the API.
+*All data is stored locally. See [Privacy](PRIVACY.md) for details.*
 
-## Sessions database (SQLite)
+## Documentation
 
-Mantora stores sessions, tool calls, casts, and approvals in a local SQLite database.
+* [Configuration Guide](docs/configuration.md) - Flags, ports, and policy overrides.
+* [Architecture](docs/architecture.md) - How the proxy internals work.
+* [Contributing](CONTRIBUTING.md) - Build setup and testing.
 
-Defaults (if you don’t configure anything):
-- Database path: `~/.mantora/sessions.db`
-- Created on first run (both `mantora up` and `mantora mcp`)
+## Community
 
-How to override:
-- Set `sqlite_path = "/absolute/path/to/sessions.db"` in `config.toml`
-- Or set `MANTORA_STORAGE__SQLITE__PATH=/absolute/path/to/sessions.db` in the environment
+Found a bug? Have a feature request?
 
-If you run the UI and the MCP proxy in separate processes (common with Cursor/Claude), make sure they point at the same `sessions.db` path or the UI will look “empty”.
-
-Precedence:
-1) CLI flags
-2) environment variables
-3) `config.toml`
-4) defaults
-
-See `config.toml.example`.
-
-## Safety defaults
-
-Protective Mode is ON by default. In protective mode, Mantora blocks (or requires approval for) common foot-guns like:
-- DDL (CREATE/ALTER/DROP)
-- DML (INSERT/UPDATE/DELETE)
-- multi-statement SQL
-- DELETE without WHERE
-- unknown tools (explicit approval required)
-
-## Troubleshooting
-
-**Problem: "No tools available" in Claude/Cursor**
-*   Check if `mantora mcp` exited or crashed (run with `--trace`).
-*   Verify `mcp.json` points to the correct `mantora` executable location (try using value of `which mantora`).
-
-**Problem: Proxy won't start**
-*   Check port conflicts or missing dependencies (e.g., `duckdb` extra not installed).
-*   Ensure the target database file path is absolute.
-
-**Problem: UI shows no sessions**
-*   This usually means the UI and MCP Proxy are using different database files.
-*   Run both with `MANTORA_STORAGE__SQLITE__PATH` set explicitly to the same path to verify.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for details on:
-- Running the Docker demo environment
-- Local development setup (Backend/Frontend)
-- Building from source
-
-## Privacy & Trust
-
-**What Mantora logs/stores**
-Mantora stores a complete record of your sessions, including:
-*   **Session Metadata**: Titles and timestamps.
-*   **Full Execution Trace**: Tool call arguments and **result previews (capped)** by default (configurable rows/bytes).
-*   **Receipt fields**: coarse target type + tool category + SQL classification/warnings + policy rule ids + decision state.
-*   **Artifacts**: Any tables, charts, or notes generated during the session.
-*   **Decisions**: A record of any "allow/deny" decisions made on blocked actions.
-
-**Where it stores it**
-All data is stored in a single local SQLite file:
-`~/.mantora/sessions.db`
-
-**How to delete data**
-*   **Granular**: Open the Mantora UI (`mantora up`) and click the trash icon next to any session to delete it and its associated data permanently.
-*   **Nuclear**: Simply delete the database file from your terminal:
-    ```bash
-    rm ~/.mantora/sessions.db
-    ```
-
-**Does anything leave the machine?**
-**No.** Mantora works entirely locally. It does not contain any telemetry, analytics, or "phone home" mechanisms.
+* [Open an Issue](https://github.com/josephwibowo/mantora/issues)
+* **Star this repo** ⭐️ if you find it useful!
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT © [Joseph Wibowo](https://github.com/josephwibowo)
