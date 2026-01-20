@@ -41,7 +41,26 @@ Configure your MCP client (e.g., `claude_desktop_config.json`) to route through 
   "mcpServers": {
     "my-db": {
       "command": "mantora",
-      "args": ["connect", "--type", "duckdb", "--db-path", "./my_data.db"]
+      "args": ["mcp", "--connector", "duckdb", "--db", "./my_data.db"]
+    }
+  }
+}
+```
+
+**For Postgres:**
+
+```json
+{
+  "mcpServers": {
+    "my-db": {
+      "command": "mantora",
+      "args": [
+        "mcp",
+        "--connector",
+        "postgres",
+        "--dsn",
+        "postgresql://user:password@localhost:5432/dbname"
+      ]
     }
   }
 }

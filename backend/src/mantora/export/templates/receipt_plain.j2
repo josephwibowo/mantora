@@ -1,0 +1,41 @@
+═══════════════════════════════════════════════════════════════
+{{ status_emoji }} MANTORA SESSION — {{ status_label | upper }}
+═══════════════════════════════════════════════════════════════
+
+Session: {{ session_title }}
+Created: {{ created_at }}
+
+───────────────────────────────────────────────────────────────
+SUMMARY
+───────────────────────────────────────────────────────────────
+• Tables: {{ summary_row.tables }}
+• Warnings: {{ summary_row.warnings }}
+• Blocks: {{ summary_row.blocks }}
+• Stats: {{ secondary_stats }}
+
+{%- if context %}
+• Context: {{ context.repo_name }} / {{ context.branch }} ({{ context.commit[:7] if context.commit else '?' }})
+{%- endif %}
+
+───────────────────────────────────────────────────────────────
+TIMELINE
+───────────────────────────────────────────────────────────────
+{% for row in timeline -%}
+#{{ row.step_num }}  [{{ row.abs_time }} +{{ row.rel_time }}]  {{ row.step_type }}  {{ row.status_emoji }}  {{ row.table }}  {{ row.note }}
+{% endfor %}
+───────────────────────────────────────────────────────────────
+STEP DETAILS
+───────────────────────────────────────────────────────────────
+
+{% for detail in sql_details -%}
+{{ detail.step_label }} {{ detail.meta }}
+    {{ detail.sql | replace('\n', '\n    ') }}
+
+{%- for cast in detail.casts %}
+    [CAST] {{ cast.title }} ({{ cast.kind }})
+    {{ cast.table_md | replace('\n', '\n    ') }}
+{%- endfor %}
+
+{% endfor %}
+───────────────────────────────────────────────────────────────
+Session ID: {{ session_id }}

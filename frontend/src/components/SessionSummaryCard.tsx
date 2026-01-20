@@ -1,6 +1,30 @@
-import { useMemo, useState } from 'react';
-import { Alert, Box, Button, Chip, InputBase, Paper, Stack, Typography } from '@mui/material';
+import { useMemo, useState, useRef } from 'react';
+import {
+  Alert,
+  Box,
+  Button,
+  ButtonGroup,
+  ClickAwayListener,
+  Chip,
+  Divider,
+  Grow,
+  InputBase,
+  ListItemIcon,
+  ListItemText,
+  ListSubheader,
+  MenuItem,
+  MenuList,
+  Paper,
+  Popper,
+  Snackbar,
+  Stack,
+  Switch,
+  Typography,
+} from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import DataObjectIcon from '@mui/icons-material/DataObject';
 
 import type { Session, SessionSummary } from '../api/types';
 
@@ -9,6 +33,11 @@ interface SessionSummaryCardProps {
   rollup: SessionSummary | null;
   isLoading: boolean;
   onCopyForPr: () => Promise<void>;
+  onCopyPlain: () => Promise<void>;
+  onExportMd: () => void;
+  onExportJson: () => void;
+  includeData: boolean;
+  onIncludeDataChange: (checked: boolean) => void;
   onSaveRepoRoot: (repoRoot: string | null) => Promise<void>;
   onSaveTag: (tag: string | null) => Promise<void>;
   isCopying: boolean;
@@ -30,6 +59,11 @@ export function SessionSummaryCard({
   rollup,
   isLoading,
   onCopyForPr,
+  onCopyPlain,
+  onExportMd,
+  onExportJson,
+  includeData,
+  onIncludeDataChange,
   onSaveRepoRoot,
   onSaveTag,
   isCopying,
@@ -44,6 +78,10 @@ export function SessionSummaryCard({
   const currentRepoRoot = session.context?.repo_root ?? '';
   const [draftRepoRoot, setDraftRepoRoot] = useState(currentRepoRoot);
   const [repoRootError, setRepoRootError] = useState<string | null>(null);
+
+  // Split button state
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLDivElement>(null);
 
   const status = deriveStatus(rollup);
   const tablesTouched = rollup?.tables_touched ?? null;
@@ -65,6 +103,7 @@ export function SessionSummaryCard({
   );
 
   const handleCopy = async () => {
+    setOpen(false); // Close menu if open to prevent layout shift
     setCopyError(null);
     setCopied(false);
     try {
@@ -74,6 +113,32 @@ export function SessionSummaryCard({
       const message = err instanceof Error ? err.message : 'Failed to copy report';
       setCopyError(message);
     }
+  };
+
+  const handleCopyClose = (event?: React.SyntheticEvent | Event, reason?: string) => {
+    if (reason === 'clickaway') {
+      return;
+    }
+    setCopied(false);
+  };
+
+  const handleMenuItemClick = (
+    event: React.MouseEvent<HTMLLIElement, MouseEvent>,
+    action: () => void | Promise<void>,
+  ) => {
+    void action();
+    setOpen(false);
+  };
+
+  const handleToggle = () => {
+    setOpen((prevOpen) => !prevOpen);
+  };
+
+  const handleClose = (event: Event) => {
+    if (anchorRef.current && anchorRef.current.contains(event.target as HTMLElement)) {
+      return;
+    }
+    setOpen(false);
   };
 
   const trimmedTag = draftTag.trim();
@@ -106,6 +171,7 @@ export function SessionSummaryCard({
     <Paper variant='outlined' sx={{ borderRadius: 2, p: 2, bgcolor: 'background.paper' }}>
       <Stack spacing={1.25}>
         <Stack direction='row' alignItems='center' justifyContent='space-between' spacing={2}>
+          {/* ... keeping header part same ... */}
           <Box>
             <Stack direction='row' spacing={1} alignItems='center'>
               <Typography variant='subtitle2' fontWeight={800}>
@@ -121,21 +187,109 @@ export function SessionSummaryCard({
           </Box>
 
           <Stack direction='row' spacing={1} alignItems='center'>
-            <Button
-              size='small'
-              variant='contained'
-              startIcon={<ContentCopyIcon />}
-              onClick={handleCopy}
-              disabled={isCopying}
-              sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 1.5 }}
+            <ButtonGroup variant='contained' ref={anchorRef} aria-label='split button'>
+              <Button
+                size='small'
+                startIcon={<ContentCopyIcon />}
+                onClick={handleCopy}
+                disabled={isCopying}
+                sx={{ textTransform: 'none', fontWeight: 700 }}
+              >
+                {isCopying ? 'Copying…' : 'Copy report (.md)'}
+              </Button>
+              <Button
+                size='small'
+                aria-controls={open ? 'split-button-menu' : undefined}
+                aria-expanded={open ? 'true' : undefined}
+                aria-label='select merge strategy'
+                aria-haspopup='menu'
+                onClick={handleToggle}
+              >
+                <ArrowDropDownIcon />
+              </Button>
+            </ButtonGroup>
+            <Popper
+              sx={{ zIndex: 1 }}
+              open={open}
+              anchorEl={anchorRef.current}
+              role={undefined}
+              transition
+              disablePortal
             >
-              {isCopying ? 'Copying…' : 'Copy report (.md)'}
-            </Button>
+              {({ TransitionProps, placement }) => (
+                <Grow
+                  {...TransitionProps}
+                  style={{
+                    transformOrigin: placement === 'bottom' ? 'center top' : 'center bottom',
+                  }}
+                >
+                  <Paper sx={{ minWidth: 220 }}>
+                    <ClickAwayListener onClickAway={handleClose}>
+                      <MenuList id='split-button-menu' autoFocusItem={open}>
+                        {/* 1. Settings Section */}
+                        <ListSubheader disableSticky sx={{ lineHeight: '32px' }}>
+                          Options
+                        </ListSubheader>
+                        <MenuItem
+                          onClick={() => {
+                            // Don't close menu when toggling switch
+                            onIncludeDataChange(!includeData);
+                          }}
+                        >
+                          <ListItemIcon>
+                            <Switch
+                              size='small'
+                              checked={includeData}
+                              onChange={(e) => onIncludeDataChange(e.target.checked)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </ListItemIcon>
+                          <ListItemText primary='Include sample data' />
+                        </MenuItem>
+
+                        <Divider />
+
+                        {/* 2. Copy Section */}
+                        <ListSubheader disableSticky sx={{ lineHeight: '32px' }}>
+                          Copy
+                        </ListSubheader>
+                        <MenuItem
+                          onClick={(event) => handleMenuItemClick(event, () => onCopyPlain())}
+                        >
+                          <ListItemIcon>
+                            <ContentCopyIcon fontSize='small' />
+                          </ListItemIcon>
+                          <ListItemText primary='Copy report (Plain)' />
+                        </MenuItem>
+
+                        <Divider />
+
+                        {/* 3. Download Section */}
+                        <ListSubheader disableSticky sx={{ lineHeight: '32px' }}>
+                          Download
+                        </ListSubheader>
+                        <MenuItem onClick={(event) => handleMenuItemClick(event, onExportMd)}>
+                          <ListItemIcon>
+                            <FileDownloadIcon fontSize='small' />
+                          </ListItemIcon>
+                          <ListItemText primary='Download report (.md)' />
+                        </MenuItem>
+                        <MenuItem onClick={(event) => handleMenuItemClick(event, onExportJson)}>
+                          <ListItemIcon>
+                            <DataObjectIcon fontSize='small' />
+                          </ListItemIcon>
+                          <ListItemText primary='Download session JSON' />
+                        </MenuItem>
+                      </MenuList>
+                    </ClickAwayListener>
+                  </Paper>
+                </Grow>
+              )}
+            </Popper>
           </Stack>
         </Stack>
 
         {copyError && <Alert severity='error'>{copyError}</Alert>}
-        {copied && <Alert severity='success'>Copied report to clipboard.</Alert>}
         {repoRootError && <Alert severity='error'>{repoRootError}</Alert>}
         {tagError && <Alert severity='error'>{tagError}</Alert>}
 
@@ -269,6 +423,16 @@ export function SessionSummaryCard({
           </Button>
         </Stack>
       </Stack>
+      <Snackbar
+        open={copied}
+        autoHideDuration={3000}
+        onClose={handleCopyClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleCopyClose} severity='success' sx={{ width: '100%' }}>
+          Copied report to clipboard.
+        </Alert>
+      </Snackbar>
     </Paper>
   );
 }

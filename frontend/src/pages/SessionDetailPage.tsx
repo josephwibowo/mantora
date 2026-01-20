@@ -10,18 +10,10 @@ import {
   List,
   ListItemButton,
   ListItemText,
-  ListSubheader,
   Button,
-  Menu,
-  MenuItem,
-  ListItemIcon,
-  Switch,
-  Divider,
   IconButton,
   Tooltip,
 } from '@mui/material';
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import DataObjectIcon from '@mui/icons-material/DataObject';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import CloseIcon from '@mui/icons-material/Close';
@@ -95,7 +87,6 @@ export function SessionDetailPage() {
   const [searchFilter, setSearchFilter] = useState('');
 
   // Export state
-  const [exportAnchorEl, setExportAnchorEl] = useState<null | HTMLElement>(null);
   const [includeData, setIncludeData] = useState(() => {
     return localStorage.getItem(PREF_INCLUDE_DATA) === 'true';
   });
@@ -220,9 +211,13 @@ export function SessionDetailPage() {
   };
 
   const handleCopyForPr = async (withData: boolean) => {
-    const res = await receipt.mutateAsync(withData);
+    const res = await receipt.mutateAsync({ includeData: withData, format: 'gfm' });
     await copyToClipboard(res.markdown);
-    setExportAnchorEl(null);
+  };
+
+  const handleCopyPlain = async () => {
+    const res = await receipt.mutateAsync({ includeData: false, format: 'plain' });
+    await copyToClipboard(res.markdown);
   };
 
   const handleSaveTag = async (tag: string | null) => {
@@ -308,7 +303,11 @@ export function SessionDetailPage() {
             rollup={rollup.data ?? null}
             isLoading={rollup.isLoading}
             onCopyForPr={handleCopyReport}
-            // onExportJson={handleExportJson} // Removed JSON button
+            onCopyPlain={handleCopyPlain}
+            onExportMd={handleExportMd}
+            onExportJson={handleExportJson}
+            includeData={includeData}
+            onIncludeDataChange={handleIncludeDataChange}
             onSaveRepoRoot={handleSaveRepoRoot}
             onSaveTag={handleSaveTag}
             isCopying={receipt.isPending}
@@ -504,80 +503,6 @@ export function SessionDetailPage() {
           title: session.data?.title ?? 'Untitled Session',
           steps: stepsData,
           showBack: true,
-          actions: (
-            <>
-              <Button
-                variant='outlined'
-                size='small'
-                endIcon={<KeyboardArrowDownIcon />}
-                onClick={(e) => setExportAnchorEl(e.currentTarget)}
-                sx={{
-                  borderColor: 'divider',
-                  color: 'text.secondary',
-                  textTransform: 'none',
-                  fontWeight: 600,
-                }}
-              >
-                Export
-              </Button>
-              <Menu
-                anchorEl={exportAnchorEl}
-                open={Boolean(exportAnchorEl)}
-                onClose={() => setExportAnchorEl(null)}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                PaperProps={{ sx: { minWidth: 220, mt: 1 } }}
-              >
-                <MenuItem onClick={() => handleIncludeDataChange(!includeData)}>
-                  <ListItemIcon>
-                    <Switch
-                      size='small'
-                      checked={includeData}
-                      onChange={(e) => handleIncludeDataChange(e.target.checked)}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </ListItemIcon>
-                  <ListItemText primary='Include sample data' />
-                </MenuItem>
-
-                <Divider />
-                <ListSubheader sx={{ lineHeight: '32px' }}>Report</ListSubheader>
-
-                <MenuItem onClick={() => handleCopyForPr(includeData)}>
-                  <ListItemIcon>
-                    <ContentCopyIcon fontSize='small' />
-                  </ListItemIcon>
-                  <ListItemText primary='Copy report (Markdown)' />
-                </MenuItem>
-                <MenuItem
-                  onClick={() => {
-                    handleExportMd();
-                    setExportAnchorEl(null);
-                  }}
-                >
-                  <ListItemIcon>
-                    <FileDownloadIcon fontSize='small' />
-                  </ListItemIcon>
-                  <ListItemText primary='Download report (.md)' />
-                </MenuItem>
-
-                <Divider />
-                <ListSubheader sx={{ lineHeight: '32px' }}>Data</ListSubheader>
-
-                <MenuItem
-                  onClick={() => {
-                    handleExportJson();
-                    setExportAnchorEl(null);
-                  }}
-                >
-                  <ListItemIcon>
-                    <DataObjectIcon fontSize='small' />
-                  </ListItemIcon>
-                  <ListItemText primary='Download session JSON' />
-                </MenuItem>
-              </Menu>
-            </>
-          ),
         }}
         subheader={<SessionStatsBar summary={summary} />}
         sidebar={Sidebar}
