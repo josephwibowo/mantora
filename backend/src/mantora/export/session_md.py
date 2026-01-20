@@ -190,7 +190,11 @@ def _format_step(*, step: ObservedStep, index: int, caps: Caps) -> str:
 def compute_session_summary(*, steps: list[ObservedStep], casts_count: int) -> SessionSummary:
     tool_calls = sum(1 for s in steps if s.kind == "tool_call")
     queries = sum(1 for s in steps if (s.tool_category == "query" or s.name == "query"))
-    blocks = sum(1 for s in steps if s.kind == "blocker")
+
+    raw_blocks = sum(1 for s in steps if s.kind == "blocker")
+    allowed = sum(1 for s in steps if s.kind == "blocker_decision" and s.decision == "allowed")
+    blocks = max(0, raw_blocks - allowed)
+
     errors = sum(1 for s in steps if s.status == "error")
     warnings = sum(len(s.warnings or []) for s in steps)
     return SessionSummary(

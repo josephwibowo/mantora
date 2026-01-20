@@ -115,7 +115,9 @@ def _build_receipt_context(
     status_text = f"{emoji} {status}" if emoji else status
     tables_text = ", ".join(f"`{t}`" for t in tables) if tables else "—"
     warnings_text = ", ".join(warnings) if warnings else "—"
-    blocks = sum(1 for s in steps if s.kind == "blocker")
+    raw_blocks = sum(1 for s in steps if s.kind == "blocker")
+    allowed = sum(1 for s in steps if s.kind == "blocker_decision" and s.decision == "allowed")
+    blocks = max(0, raw_blocks - allowed)
     blocks_text = str(blocks) if blocks else "—"
 
     summary_row = SummaryRow(
@@ -380,7 +382,11 @@ def _get_step_note(step: ObservedStep) -> str:
 
 
 def _derive_status(steps: list[ObservedStep]) -> str:
-    if any(s.kind == "blocker" for s in steps):
+    blocks = sum(1 for s in steps if s.kind == "blocker")
+    allowed = sum(1 for s in steps if s.kind == "blocker_decision" and s.decision == "allowed")
+    effective_blocks = max(0, blocks - allowed)
+
+    if effective_blocks > 0:
         return "blocked"
     if any(bool(s.warnings) for s in steps):
         return "warnings"
