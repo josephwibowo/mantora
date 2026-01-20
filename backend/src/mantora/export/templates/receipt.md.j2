@@ -1,0 +1,76 @@
+<details>
+<summary><strong>{{ status_emoji }} Mantora — {{ status_label }}</strong> · <code>{{ session_title }}</code></summary>
+
+<br/>
+
+### At a glance
+
+- **Created:** `{{ created_at }}` · {{ secondary_stats }}
+- **Tables:** {{ summary_row.tables }} · **Warnings:** {{ summary_row.warnings }} · **Blocks:** {{ summary_row.blocks }}
+
+{% if context %}
+
+### Context
+
+{% for label, value in [
+    ('Repo', context.repo_name),
+    ('Branch', context.branch),
+    ('Commit', context.commit),
+    ('Dirty', context.dirty),
+    ('Tag', context.tag)
+] if value is not none %}
+- **{{ label }}:** `{{ value }}`
+{% endfor %}
+
+{% endif %}
+
+---
+
+### Summary
+
+| Status | Tables | Warnings | Blocks |
+| :--- | :--- | :--- | ---: |
+| {{ summary_row.status }} | {{ summary_row.tables }} | {{ summary_row.warnings }} | {{ summary_row.blocks }} |
+
+---
+
+### Timeline
+
+| Time | t+ | # | Type | Status | Table | Note |
+|---|---:|---:|---|---|---|---|
+{% for row in timeline %}
+| {{ row.abs_time }} | {{ row.rel_time }} | {{ row.step_num }} | {{ row.step_type }} | {{ row.status_emoji }} | {{ row.table }} | {{ row.note }} |
+{% endfor %}
+
+---
+
+### Step details
+
+{% for detail in sql_details %}
+{{ detail.step_label }} {{ detail.meta }}
+
+```sql
+{{ detail.sql }}
+```
+
+{% for cast in detail.casts %}
+
+<details>
+<summary>{{ cast.title }} ({{ cast.kind }})</summary>
+
+{{ cast.table_md }}
+
+</details>
+{% endfor %}
+
+---
+
+{% endfor %}
+
+**Session ID:** `{{ session_id }}`
+
+{% if include_data %}
+**Evidence:** Included inline
+{% endif %}
+
+</details>

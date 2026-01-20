@@ -177,22 +177,20 @@ describe('SessionDetailPage', () => {
 
     await screen.findByText('My Session');
 
+    // Check App Bar Export button should NOT be there
+    expect(screen.queryByText('Export')).not.toBeInTheDocument();
+
     // Check Session Summary buttons
     expect(screen.getByText('Copy report (.md)')).toBeInTheDocument();
-    expect(screen.queryByText('Export JSON')).not.toBeInTheDocument();
-    expect(screen.queryByText('More export options…')).not.toBeInTheDocument();
 
-    // Check App Bar Export button
-    const exportBtn = screen.getByText('Export');
-    expect(exportBtn).toBeInTheDocument();
+    // Find split button dropdown arrow
+    const splitBtn = screen.getByLabelText('select merge strategy');
+    fireEvent.click(splitBtn);
 
-    // Open dropdown
-    fireEvent.click(exportBtn);
-    expect(screen.getByText('Report')).toBeInTheDocument(); // Header
-    expect(screen.getByText('Copy report (Markdown)')).toBeInTheDocument();
+    // Verify Dropdown contents
+    expect(screen.getByText('Include sample data')).toBeInTheDocument(); // Switch option
+    expect(screen.getByText('Download')).toBeInTheDocument(); // Header
     expect(screen.getByText('Download report (.md)')).toBeInTheDocument();
-    expect(screen.getByText('Data')).toBeInTheDocument(); // Header
     expect(screen.getByText('Download session JSON')).toBeInTheDocument();
-    expect(screen.getByText('Include sample data')).toBeInTheDocument();
   });
 });

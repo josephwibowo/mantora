@@ -301,6 +301,9 @@ def add_step(session_id: UUID, payload: AddStepRequest, request: Request) -> Add
 
 class ReceiptRequest(BaseModel):
     include_data: bool = Field(default=False, description="Include sample data in the receipt")
+    format: Literal["gfm", "plain"] = Field(
+        default="gfm", description="Output format: gfm (GitHub) or plain (ASCII)"
+    )
 
 
 @router.post("/sessions/{session_id}/receipt", response_model=ReceiptResult)
@@ -318,6 +321,7 @@ def post_session_receipt(
         session_id=session_id,
         caps=settings.caps,
         include_data=payload.include_data,
+        format=payload.format,
     )
 
 

@@ -114,6 +114,7 @@ export type ReceiptResult = {
   markdown: string;
   truncated: boolean;
   included_data: boolean;
+  format: 'gfm' | 'plain';
 };
 
 export type PolicyRule = {

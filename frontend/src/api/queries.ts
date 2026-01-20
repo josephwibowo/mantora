@@ -150,13 +150,15 @@ export function useSessionRollup(sessionId: string) {
 }
 
 export function useSessionReceipt(sessionId: string) {
+  type ReceiptParams = { includeData: boolean; format?: 'gfm' | 'plain' };
+
   return useMutation({
-    mutationFn: async (includeData: boolean) => {
-      return apiFetch<ReceiptResult>(`/api/sessions/${sessionId}/receipt`, {
+    mutationFn: ({ includeData, format = 'gfm' }: ReceiptParams) =>
+      apiFetch<ReceiptResult>(`/api/sessions/${sessionId}/receipt`, {
         method: 'POST',
-        body: JSON.stringify({ include_data: includeData }),
-      });
-    },
+        body: JSON.stringify({ include_data: includeData, format }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
   });
 }
 
