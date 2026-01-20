@@ -66,6 +66,9 @@ def _compute_summary(steps: list[ObservedStep]) -> SessionSummary:
     errors = 0
     warnings_count = 0
 
+    # Track allowed decisions to deduct from blocks
+    allowed_decisions = 0
+
     for step in steps:
         if step.kind == "tool_call":
             tool_calls += 1
@@ -76,12 +79,17 @@ def _compute_summary(steps: list[ObservedStep]) -> SessionSummary:
                 casts += 1
         elif step.kind == "blocker":
             blocks += 1
+        elif step.kind == "blocker_decision" and step.decision == "allowed":
+            allowed_decisions += 1
 
         if step.status == "error":
             errors += 1
 
         if step.warnings:
             warnings_count += len(step.warnings)
+
+    # Net blocks (prevent specific edge cases where allowed > blocked)
+    blocks = max(0, blocks - allowed_decisions)
 
     return SessionSummary(
         tool_calls=tool_calls,
