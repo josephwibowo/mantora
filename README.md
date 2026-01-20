@@ -11,9 +11,20 @@
 Mantora focuses on making agent behavior **reviewable and repeatable**. It records the key evidence from each session and turns it into a Markdown report. Protective mode adds basic guardrails (block/warn rules) so you don’t learn about a bad query the hard way.
 
 ## What you get
-- **🔍 Session Logs:** Capture the exact SQL and tool calls an agent makes for easy verification.
-- **🧾 Shareable Reports:** One-click to generate a Markdown summary of the session for Pull Requests or Slack.
-- **🛡️ Protective Mode:** Basic guardrails that block or warn on destructive SQL patterns by default.
+### 🔍 Session Logs
+Capture the exact SQL and tool calls an agent makes for easy verification.
+
+![Session Logs](docs/assets/dashboard.png)
+
+### 🛡️ Protective Mode
+Basic guardrails that block or warn on destructive SQL patterns by default.
+
+![Protective Mode](docs/assets/protect-modal.png)
+
+### 🧾 Shareable Reports
+One-click to generate a Markdown summary for Pull Requests or Slack.
+
+![Shareable Reports](docs/assets/md-render.png)
 
 ## Quick Start
 
