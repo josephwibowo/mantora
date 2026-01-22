@@ -33,49 +33,37 @@ One-click to generate a Markdown summary for Pull Requests or Slack.
 pipx install "mantora[duckdb,postgres]"
 ```
 
-### 2. Run the Recorder (UI)
+### 2. Connect Your Agent
 
-Start the dashboard to see your sessions in real-time:
+Configure your MCP client (e.g., `claude_desktop_config.json` or Cursor Settings) to run the Mantora proxy. No target configuration is needed here!
+
+```json
+{
+  "mcpServers": {
+    "mantora": {
+      "command": "mantora",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+### 3. Run the Control Room (UI)
+
+Start the dashboard to manage your connections and view logs in real-time:
 
 ```bash
 mantora up
 ```
 
-### 3. Connect Your Agent
+### 4. Configure Targets
 
-Configure your MCP client (e.g., `claude_desktop_config.json`) to route through Mantora.
+Open the **Control Room** (http://localhost:3030) and use the target switcher in the top navigation bar to:
+1.  **Create** new targets for your databases (DuckDB, Postgres, etc.).
+2.  **Activate** the target you want your agent to use.
+3.  **Switch** targets instantly without restarting your agent.
 
-**For DuckDB:**
-
-```json
-{
-  "mcpServers": {
-    "my-db": {
-      "command": "mantora",
-      "args": ["mcp", "--connector", "duckdb", "--db", "./my_data.db"]
-    }
-  }
-}
-```
-
-**For Postgres:**
-
-```json
-{
-  "mcpServers": {
-    "my-db": {
-      "command": "mantora",
-      "args": [
-        "mcp",
-        "--connector",
-        "postgres",
-        "--dsn",
-        "postgresql://user:password@localhost:5432/dbname"
-      ]
-    }
-  }
-}
-```
+> **Note**: For advanced configuration (safety policy, storage paths), you can use a `mantora.toml` file. See [Configuration](docs/configuration.md) for details.
 
 ### How it works
 

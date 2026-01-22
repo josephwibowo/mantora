@@ -9,6 +9,7 @@ from pydantic import JsonValue
 
 from mantora.casts.models import Cast
 from mantora.models.events import ObservedStep, Session, SessionContext
+from mantora.models.targets import Target
 from mantora.policy.blocker import PendingRequest, PendingStatus
 from mantora.store.interface import SessionStore
 
@@ -23,6 +24,8 @@ class MemorySessionStore(SessionStore):
         self._pending: dict[UUID, PendingRequest] = {}  # request_id -> PendingRequest
         self._session_client_ids: dict[UUID, str | None] = {}
         self._client_default_repo_roots: dict[str, str] = {}
+        self._targets: dict[UUID, Target] = {}
+        self._active_target_id: UUID | None = None
 
     def create_session(
         self,
@@ -300,4 +303,75 @@ class MemorySessionStore(SessionStore):
             decided_at=datetime.now(UTC),
         )
         self._pending[request_id] = decided
+
         return decided
+
+    def create_target(
+        self,
+        *,
+        name: str,
+        type: str,
+        command: list[str] | None = None,
+        env: dict[str, str] | None = None,
+    ) -> Target:
+        target = Target(
+            id=uuid4(),
+            name=name,
+            type=type,
+            command=command or [],
+            env=env or {},
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+        self._targets[target.id] = target
+        return target
+
+    def list_targets(self) -> Sequence[Target]:
+        return list(self._targets.values())
+
+    def get_target(self, target_id: UUID) -> Target | None:
+        return self._targets.get(target_id)
+
+    def get_active_target(self) -> Target | None:
+        if self._active_target_id:
+            return self._targets.get(self._active_target_id)
+        return None
+
+    def update_target(
+        self,
+        target_id: UUID,
+        *,
+        name: str | None = None,
+        type: str | None = None,
+        command: list[str] | None = None,
+        env: dict[str, str] | None = None,
+    ) -> Target | None:
+        existing = self._targets.get(target_id)
+        if not existing:
+            return None
+
+        updated = Target(
+            id=existing.id,
+            name=name if name is not None else existing.name,
+            type=type if type is not None else existing.type,
+            command=command if command is not None else existing.command,
+            env=env if env is not None else existing.env,
+            created_at=existing.created_at,
+            updated_at=datetime.now(UTC),
+        )
+        self._targets[target_id] = updated
+        return updated
+
+    def set_active_target(self, target_id: UUID) -> Target | None:
+        if target_id not in self._targets:
+            return None
+        self._active_target_id = target_id
+        return self._targets[target_id]
+
+    def delete_target(self, target_id: UUID) -> bool:
+        if target_id in self._targets:
+            del self._targets[target_id]
+            if self._active_target_id == target_id:
+                self._active_target_id = None
+            return True
+        return False

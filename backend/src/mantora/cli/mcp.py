@@ -18,12 +18,8 @@ logger = logging.getLogger(__name__)
 def configure_parser(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     parser = subparsers.add_parser("mcp", help="Run the MCP proxy")
     parser.set_defaults(func=run_mcp)
-    parser.add_argument("--config", type=Path, help="Path to config.toml")
-    parser.add_argument(
-        "--project-root",
-        type=Path,
-        help="Project root for git context detection (default: auto-detect from cwd)",
-    )
+    parser.add_argument("--config", type=Path, help="Path to mantora.toml")
+
     parser.add_argument(
         "--tag",
         help="Optional session tag for filtering and PR receipts (e.g., JIRA ticket)",
@@ -48,6 +44,53 @@ def _parse_protective(value: str | None) -> bool | None:
     if value is None:
         return None
     return value.lower() == "on"
+
+
+def _resolve_binary_path(binary_name: str) -> str:
+    """Resolve a binary name to its full path.
+
+    Checks the directory containing the current Python executable first (for pipx/venv),
+    then falls back to PATH lookup.
+
+    Args:
+        binary_name: The binary name (e.g., 'mcp-server-duckdb')
+
+    Returns:
+        Full path to the binary, or the original name if not found.
+    """
+    # Check the bin directory next to the current Python executable
+    local_bin = Path(sys.executable).parent / binary_name
+    if local_bin.exists():
+        return str(local_bin)
+
+    # Fall back to PATH lookup
+    path_bin = shutil.which(binary_name)
+    if path_bin:
+        return path_bin
+
+    # Return original name as fallback (will fail at runtime with clear error)
+    return binary_name
+
+
+def _resolve_command(command: list[str]) -> list[str]:
+    """Resolve the binary in a command list to its full path.
+
+    Args:
+        command: Command list like ['mcp-server-duckdb', '--db', '/path/to/db']
+
+    Returns:
+        Command list with the binary resolved to full path.
+    """
+    if not command:
+        return command
+
+    # Only resolve if the first element looks like a bare binary name (no path separator)
+    binary = command[0]
+    if os.sep not in binary and not binary.startswith("/"):
+        resolved = _resolve_binary_path(binary)
+        return [resolved, *command[1:]]
+
+    return command
 
 
 def build_target_command(connector: str, db: Path | None, dsn: str | None) -> list[str]:
@@ -205,18 +248,43 @@ def run_mcp(args: argparse.Namespace) -> int:
         logging.getLogger().setLevel(logging.DEBUG)
 
     protective = _parse_protective(args.protective)
+
     config = load_proxy_config(
-        args.config,
+        config_path=args.config,
         cli_overrides={
             "protective_mode": protective,
-            "project_root": args.project_root,
             "tag": args.tag,
         },
     )
 
+    # NEW: Load active target from UI database before applying CLI connector
+    store_path = _resolve_store_path(config, explicit=None)
+    if store_path.exists():
+        from mantora.store.sqlite import SQLiteSessionStore
+
+        temp_store = SQLiteSessionStore(store_path)
+        try:
+            active_target = temp_store.get_active_target()
+            if active_target:
+                # Override config with UI-configured target
+                # Resolve command path (e.g., 'mcp-server-duckdb' -> full path in pipx venv)
+                resolved_command = _resolve_command(active_target.command)
+                config.target = TargetConfig(
+                    type=active_target.type,
+                    command=resolved_command,
+                    env=active_target.env,
+                )
+                logger = logging.getLogger(__name__)
+                logger.info(
+                    "Using UI-configured target: %s (command: %s)",
+                    active_target.name,
+                    resolved_command[0] if resolved_command else "none",
+                )
+        finally:
+            temp_store.close()
+
     _apply_connector(args, config)
 
-    store_path = _resolve_store_path(config, explicit=None)
     _run_proxy(config, store_path, args.session)
     return 0
 
@@ -234,9 +302,8 @@ Examples:
 Configuration:
   The proxy looks for config in these locations (in order):
   1. Provided config_path argument
-  2. ./config.toml
-  3. ./mantora.toml (legacy)
-  4. platform config.toml
+  2. ./mantora.toml
+  3. platform mantora.toml
         """,
     )
     parser.add_argument(

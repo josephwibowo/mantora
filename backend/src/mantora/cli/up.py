@@ -48,7 +48,7 @@ def configure_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPar
         action="store_false",
         help="Do not open the browser",
     )
-    parser.add_argument("--config", type=Path, help="Path to config.toml")
+    parser.add_argument("--config", type=Path, help="Path to mantora.toml")
 
 
 def _print_banner(host: str, port: int, config_path: Path) -> None:

@@ -29,6 +29,7 @@ import BlockIcon from '@mui/icons-material/Block';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { ChangeEvent, useState } from 'react';
+
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useCreateSession,
@@ -501,6 +502,7 @@ export function SessionsPage() {
               Are you sure you want to delete this session? This action cannot be undone.
             </DialogContentText>
           </DialogContent>
+
           <DialogActions>
             <Button onClick={cancelDelete} color='inherit'>
               Cancel

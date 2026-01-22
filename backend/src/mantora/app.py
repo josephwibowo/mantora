@@ -18,6 +18,7 @@ from mantora.api.routes_pending import router as pending_router
 from mantora.api.routes_sessions import router as sessions_router
 from mantora.api.routes_settings import router as settings_router
 from mantora.api.routes_stream import router as stream_router
+from mantora.api.routes_targets import router as targets_router
 from mantora.config.settings import Settings, StorageBackend
 from mantora.store.memory import MemorySessionStore
 from mantora.store.retention import prune_sqlite_sessions
@@ -132,6 +133,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     app.include_router(stream_router)
     app.include_router(casts_router)
     app.include_router(pending_router)
+    app.include_router(targets_router)
 
     frontend_dist = get_frontend_dist_path()
     if frontend_dist and frontend_dist.is_dir():
