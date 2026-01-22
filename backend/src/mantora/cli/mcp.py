@@ -88,7 +88,7 @@ def _resolve_command(command: list[str]) -> list[str]:
     binary = command[0]
     if os.sep not in binary and not binary.startswith("/"):
         resolved = _resolve_binary_path(binary)
-        return [resolved] + command[1:]
+        return [resolved, *command[1:]]
 
     return command
 
