@@ -8,11 +8,8 @@ from collections.abc import Sequence
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import Any, Literal, cast
 from uuid import UUID, uuid4
-
-if TYPE_CHECKING:
-    from mantora.models.targets import Target
 
 from pydantic import JsonValue
 
@@ -26,6 +23,7 @@ from mantora.models.events import (
     SessionContext,
     TruncatedText,
 )
+from mantora.models.targets import Target
 from mantora.policy.blocker import PendingRequest, PendingStatus
 from mantora.store.interface import SessionStore
 from mantora.store.retention import prune_sqlite_sessions
@@ -1466,7 +1464,6 @@ class SQLiteSessionStore(SessionStore):
         env: dict[str, str] | None = None,
     ) -> Target:
         """Create a new target configuration."""
-        from mantora.models.targets import Target
 
         target_id = uuid4()
         now = datetime.now(UTC)
@@ -1508,7 +1505,6 @@ class SQLiteSessionStore(SessionStore):
 
     def list_targets(self) -> Sequence[Target]:
         """List all configured targets."""
-        from mantora.models.targets import Target
 
         conn = _connect(self._db_path)
         try:
@@ -1541,7 +1537,6 @@ class SQLiteSessionStore(SessionStore):
 
     def get_target(self, target_id: UUID) -> Target | None:
         """Get a specific target by ID."""
-        from mantora.models.targets import Target
 
         conn = _connect(self._db_path)
         try:
@@ -1573,7 +1568,6 @@ class SQLiteSessionStore(SessionStore):
 
     def get_active_target(self) -> Target | None:
         """Get the currently active target."""
-        from mantora.models.targets import Target
 
         conn = _connect(self._db_path)
         try:

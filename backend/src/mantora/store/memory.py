@@ -3,16 +3,13 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
-
-if TYPE_CHECKING:
-    from mantora.models.targets import Target
 
 from pydantic import JsonValue
 
 from mantora.casts.models import Cast
 from mantora.models.events import ObservedStep, Session, SessionContext
+from mantora.models.targets import Target
 from mantora.policy.blocker import PendingRequest, PendingStatus
 from mantora.store.interface import SessionStore
 
@@ -317,8 +314,6 @@ class MemorySessionStore(SessionStore):
         command: list[str] | None = None,
         env: dict[str, str] | None = None,
     ) -> Target:
-        from mantora.models.targets import Target
-
         target = Target(
             id=uuid4(),
             name=name,
@@ -351,8 +346,6 @@ class MemorySessionStore(SessionStore):
         command: list[str] | None = None,
         env: dict[str, str] | None = None,
     ) -> Target | None:
-        from mantora.models.targets import Target
-
         existing = self._targets.get(target_id)
         if not existing:
             return None
