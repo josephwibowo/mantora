@@ -9,6 +9,7 @@ import type {
   ReceiptResult,
   Session,
   SessionSummary,
+  Target,
 } from './types';
 
 export interface SessionsFilterParams {
@@ -233,6 +234,96 @@ export function useDenyPending(sessionId: string) {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['pending', sessionId] });
       await queryClient.invalidateQueries({ queryKey: ['steps', sessionId] });
+    },
+  });
+}
+
+// ===== Target Management =====
+
+export function useTargets() {
+  return useQuery({
+    queryKey: ['targets'],
+    queryFn: () => apiFetch<Target[]>('/api/targets'),
+    refetchInterval: 2000,
+  });
+}
+
+export function useActiveTarget() {
+  return useQuery({
+    queryKey: ['targets', 'active'],
+    queryFn: () => apiFetch<Target | null>('/api/targets/active'),
+    refetchInterval: 2000,
+  });
+}
+
+export function useCreateTarget() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: {
+      name: string;
+      type: string;
+      command: string[];
+      env: Record<string, string>;
+    }) => {
+      return apiFetch<Target>('/api/targets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['targets'] });
+    },
+  });
+}
+
+export function useUpdateTarget() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: {
+        name?: string;
+        type?: string;
+        command?: string[];
+        env?: Record<string, string>;
+      };
+    }) => {
+      return apiFetch<Target>(`/api/targets/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['targets'] });
+    },
+  });
+}
+
+export function useDeleteTarget() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await apiFetch(`/api/targets/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['targets'] });
+    },
+  });
+}
+
+export function useActivateTarget() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      return apiFetch<Target>(`/api/targets/${id}/activate`, { method: 'POST' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['targets'] });
     },
   });
 }

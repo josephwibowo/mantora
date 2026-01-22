@@ -52,7 +52,7 @@ The heart of the system.
 ### 2. Policy (`backend/src/mantora/policy`)
 The decision engine.
 *   **SQL Guard:** Regex and heuristic-based analysis of SQL strings.
-*   **Blocker:** Logic to determine if a call should proceed or be halted based on `config.toml`.
+*   **Blocker:** Logic to determine if a call should proceed or be halted based on `mantora.toml`.
 
 ### 3. Store (`backend/src/mantora/store`)
 The persistence layer.

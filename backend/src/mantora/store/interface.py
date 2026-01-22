@@ -10,6 +10,7 @@ from pydantic import JsonValue
 
 from mantora.casts.models import Cast
 from mantora.models.events import ObservedStep, Session, SessionContext
+from mantora.models.targets import Target
 from mantora.policy.blocker import PendingRequest, PendingStatus
 
 
@@ -115,3 +116,33 @@ class SessionStore(Protocol):
     def decide_pending_request(
         self, request_id: UUID, *, status: PendingStatus
     ) -> PendingRequest | None: ...
+
+    # Target management methods
+    def create_target(
+        self,
+        *,
+        name: str,
+        type: str,
+        command: list[str] | None = None,
+        env: dict[str, str] | None = None,
+    ) -> Target: ...
+
+    def list_targets(self) -> Sequence[Target]: ...
+
+    def get_target(self, target_id: UUID) -> Target | None: ...
+
+    def get_active_target(self) -> Target | None: ...
+
+    def update_target(
+        self,
+        target_id: UUID,
+        *,
+        name: str | None = None,
+        type: str | None = None,
+        command: list[str] | None = None,
+        env: dict[str, str] | None = None,
+    ) -> Target | None: ...
+
+    def set_active_target(self, target_id: UUID) -> Target | None: ...
+
+    def delete_target(self, target_id: UUID) -> bool: ...

@@ -32,7 +32,7 @@ Mantora will **warn** (but allow) mostly read-only queries that might have perfo
 
 ## Configuration
 
-You can fine-tune the policy in `config.toml`:
+You can fine-tune the policy in `mantora.toml`:
 
 ```toml
 [policy]

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { StatePill } from '../StatePill';
 import { ColorModeContext } from '../../theme/ColorModeContext';
 import { ProtectiveModeBadge } from './ProtectiveModeBadge';
+import { TargetSwitcher } from './TargetSwitcher';
 
 // Icons
 import DarkModeIcon from '@mui/icons-material/DarkMode';
@@ -57,6 +58,7 @@ export function AppHeader({
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <TargetSwitcher />
           <ProtectiveModeBadge />
           {actions}
           <IconButton onClick={colorMode.toggleColorMode} color='inherit' size='small'>

@@ -12,18 +12,18 @@ from mantora.config import get_platform_config_path
 def test_get_platform_config_path_darwin(monkeypatch: Any) -> None:
     monkeypatch.setattr(platform, "system", lambda: "Darwin")
     path = get_platform_config_path()
-    assert path == (Path.home() / "Library" / "Application Support" / "mantora" / "config.toml")
+    assert path == (Path.home() / "Library" / "Application Support" / "mantora" / "mantora.toml")
 
 
 def test_get_platform_config_path_linux(monkeypatch: Any) -> None:
     monkeypatch.setattr(platform, "system", lambda: "Linux")
     monkeypatch.setenv("XDG_CONFIG_HOME", "/tmp/config")
     path = get_platform_config_path()
-    assert path == Path("/tmp/config") / "mantora" / "config.toml"
+    assert path == Path("/tmp/config") / "mantora" / "mantora.toml"
 
 
 def test_get_platform_config_path_windows(monkeypatch: Any) -> None:
     monkeypatch.setattr(platform, "system", lambda: "Windows")
     monkeypatch.setenv("APPDATA", "C:/Users/Test/AppData/Roaming")
     path = get_platform_config_path()
-    assert path == Path("C:/Users/Test/AppData/Roaming") / "mantora" / "config.toml"
+    assert path == Path("C:/Users/Test/AppData/Roaming") / "mantora" / "mantora.toml"

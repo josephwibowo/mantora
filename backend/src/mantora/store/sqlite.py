@@ -8,8 +8,11 @@ from collections.abc import Sequence
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 from uuid import UUID, uuid4
+
+if TYPE_CHECKING:
+    from mantora.models.targets import Target
 
 from pydantic import JsonValue
 
@@ -193,6 +196,28 @@ class SQLiteSessionStore(SessionStore):
                 """
                 CREATE INDEX IF NOT EXISTS idx_pending_session_created_at
                 ON pending_requests(session_id, created_at)
+                """
+            )
+
+            # Targets table (UI-configured MCP servers)
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS targets (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    type TEXT NOT NULL,
+                    command_json TEXT NOT NULL,
+                    env_json TEXT,
+                    is_active INTEGER DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            self._conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_targets_is_active
+                ON targets(is_active)
                 """
             )
 
@@ -1429,3 +1454,234 @@ class SQLiteSessionStore(SessionStore):
 
         self._checkpoint()
         return self.get_pending_request(request_id)
+
+    # ===== Target Management =====
+
+    def create_target(
+        self,
+        *,
+        name: str,
+        type: str,
+        command: list[str] | None = None,
+        env: dict[str, str] | None = None,
+    ) -> Target:
+        """Create a new target configuration."""
+        from mantora.models.targets import Target
+
+        target_id = uuid4()
+        now = datetime.now(UTC)
+        cmd_list = command or []
+        env_dict = env or {}
+        command_json = json.dumps(cmd_list, separators=(",", ":"))
+        env_json = json.dumps(env_dict, separators=(",", ":"))
+
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO targets (
+                    id, name, type, command_json, env_json, is_active, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+                """.strip(),
+                (
+                    str(target_id),
+                    name,
+                    type,
+                    command_json,
+                    env_json,
+                    now.isoformat(),
+                    now.isoformat(),
+                ),
+            )
+        self._checkpoint()
+
+        return Target(
+            id=target_id,
+            name=name,
+            type=type,
+            command=cmd_list,
+            env=env_dict,
+            is_active=False,
+            created_at=now,
+            updated_at=now,
+        )
+
+    def list_targets(self) -> Sequence[Target]:
+        """List all configured targets."""
+        from mantora.models.targets import Target
+
+        conn = _connect(self._db_path)
+        try:
+            with self._lock:
+                rows = conn.execute(
+                    """
+                    SELECT id, name, type, command_json, env_json, is_active, created_at, updated_at
+                    FROM targets
+                    ORDER BY created_at DESC
+                    """
+                ).fetchall()
+
+            targets: list[Target] = []
+            for row in rows:
+                targets.append(
+                    Target(
+                        id=UUID(row["id"]),
+                        name=row["name"],
+                        type=row["type"],
+                        command=json.loads(row["command_json"]),
+                        env=json.loads(row["env_json"]) if row["env_json"] else {},
+                        is_active=bool(row["is_active"]),
+                        created_at=datetime.fromisoformat(row["created_at"]),
+                        updated_at=datetime.fromisoformat(row["updated_at"]),
+                    )
+                )
+            return targets
+        finally:
+            conn.close()
+
+    def get_target(self, target_id: UUID) -> Target | None:
+        """Get a specific target by ID."""
+        from mantora.models.targets import Target
+
+        conn = _connect(self._db_path)
+        try:
+            with self._lock:
+                row = conn.execute(
+                    """
+                    SELECT id, name, type, command_json, env_json, is_active, created_at, updated_at
+                    FROM targets
+                    WHERE id = ?
+                    """,
+                    (str(target_id),),
+                ).fetchone()
+
+            if row is None:
+                return None
+
+            return Target(
+                id=UUID(row["id"]),
+                name=row["name"],
+                type=row["type"],
+                command=json.loads(row["command_json"]),
+                env=json.loads(row["env_json"]) if row["env_json"] else {},
+                is_active=bool(row["is_active"]),
+                created_at=datetime.fromisoformat(row["created_at"]),
+                updated_at=datetime.fromisoformat(row["updated_at"]),
+            )
+        finally:
+            conn.close()
+
+    def get_active_target(self) -> Target | None:
+        """Get the currently active target."""
+        from mantora.models.targets import Target
+
+        conn = _connect(self._db_path)
+        try:
+            with self._lock:
+                row = conn.execute(
+                    """
+                    SELECT id, name, type, command_json, env_json, is_active, created_at, updated_at
+                    FROM targets
+                    WHERE is_active = 1
+                    LIMIT 1
+                    """
+                ).fetchone()
+
+            if row is None:
+                return None
+
+            return Target(
+                id=UUID(row["id"]),
+                name=row["name"],
+                type=row["type"],
+                command=json.loads(row["command_json"]),
+                env=json.loads(row["env_json"]) if row["env_json"] else {},
+                is_active=bool(row["is_active"]),
+                created_at=datetime.fromisoformat(row["created_at"]),
+                updated_at=datetime.fromisoformat(row["updated_at"]),
+            )
+        finally:
+            conn.close()
+
+    def update_target(
+        self,
+        target_id: UUID,
+        *,
+        name: str | None = None,
+        type: str | None = None,
+        command: list[str] | None = None,
+        env: dict[str, str] | None = None,
+    ) -> Target | None:
+        """Update a target's configuration."""
+        now = datetime.now(UTC)
+        updates: list[str] = []
+        params: list[object] = []
+
+        if name is not None:
+            updates.append("name = ?")
+            params.append(name)
+        if type is not None:
+            updates.append("type = ?")
+            params.append(type)
+        if command is not None:
+            updates.append("command_json = ?")
+            params.append(json.dumps(command, separators=(",", ":")))
+        if env is not None:
+            updates.append("env_json = ?")
+            params.append(json.dumps(env, separators=(",", ":")))
+
+        if not updates:
+            return self.get_target(target_id)
+
+        updates.append("updated_at = ?")
+        params.append(now.isoformat())
+        params.append(str(target_id))
+
+        with self._lock:
+            result = self._conn.execute(
+                f"UPDATE targets SET {', '.join(updates)} WHERE id = ?",
+                params,
+            )
+            if result.rowcount == 0:
+                return None
+
+        self._checkpoint()
+        return self.get_target(target_id)
+
+    def delete_target(self, target_id: UUID) -> bool:
+        """Delete a target. Returns True if deleted, False if not found."""
+        with self._lock:
+            result = self._conn.execute(
+                "DELETE FROM targets WHERE id = ?",
+                (str(target_id),),
+            )
+            deleted = result.rowcount > 0
+
+        if deleted:
+            self._checkpoint()
+        return deleted
+
+    def set_active_target(self, target_id: UUID) -> Target | None:
+        """Set a target as active, deactivating all others."""
+        now = datetime.now(UTC)
+
+        with self._lock:
+            # First check if target exists
+            exists = self._conn.execute(
+                "SELECT 1 FROM targets WHERE id = ?",
+                (str(target_id),),
+            ).fetchone()
+            if exists is None:
+                return None
+
+            # Deactivate all targets
+            self._conn.execute("UPDATE targets SET is_active = 0")
+
+            # Activate the specified target
+            self._conn.execute(
+                "UPDATE targets SET is_active = 1, updated_at = ? WHERE id = ?",
+                (now.isoformat(), str(target_id)),
+            )
+
+        self._checkpoint()
+        return self.get_target(target_id)

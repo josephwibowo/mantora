@@ -1,6 +1,6 @@
 """Config loader for Mantora proxy and app settings.
 
-Search order: ./config.toml -> ./mantora.toml -> platform config -> legacy ~/.mantora/config.toml
+Search order: ./mantora.toml -> platform mantora.toml -> legacy ~/.mantora/mantora.toml
 Uses stdlib tomllib (Python 3.11+).
 """
 
@@ -37,30 +37,29 @@ class ProxyConfig(BaseModel):
     tag: str | None = None
 
 
-_LEGACY_CONFIG_PATH = Path.home() / ".mantora" / "config.toml"
+_LEGACY_CONFIG_PATH = Path.home() / ".mantora" / "mantora.toml"
 
 
 def get_platform_config_path() -> Path:
-    """Return the platform-specific config.toml path."""
+    """Return the platform-specific mantora.toml path."""
     system = platform.system().lower()
     if system == "darwin":
-        return Path.home() / "Library" / "Application Support" / "mantora" / "config.toml"
+        return Path.home() / "Library" / "Application Support" / "mantora" / "mantora.toml"
     if system == "windows":
         appdata = os.environ.get("APPDATA")
         if appdata:
-            return Path(appdata) / "mantora" / "config.toml"
-        return Path.home() / "AppData" / "Roaming" / "mantora" / "config.toml"
+            return Path(appdata) / "mantora" / "mantora.toml"
+        return Path.home() / "AppData" / "Roaming" / "mantora" / "mantora.toml"
 
     xdg_config = os.environ.get("XDG_CONFIG_HOME")
     if xdg_config:
-        return Path(xdg_config) / "mantora" / "config.toml"
-    return Path.home() / ".config" / "mantora" / "config.toml"
+        return Path(xdg_config) / "mantora" / "mantora.toml"
+    return Path.home() / ".config" / "mantora" / "mantora.toml"
 
 
 def get_config_search_paths() -> list[Path]:
     """Return config search paths in priority order."""
     return [
-        Path("./config.toml"),
         Path("./mantora.toml"),
         get_platform_config_path(),
         _LEGACY_CONFIG_PATH,

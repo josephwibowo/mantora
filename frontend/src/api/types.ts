@@ -138,3 +138,14 @@ export type BlockerDecisionArgs = {
   reason?: string;
   user_id?: string;
 };
+
+export type Target = {
+  id: string;
+  name: string;
+  type: string;
+  command: string[];
+  env: Record<string, string>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};

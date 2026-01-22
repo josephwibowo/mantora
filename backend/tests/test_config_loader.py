@@ -115,7 +115,7 @@ def test_load_proxy_config_invalid_safety_mode(tmp_path: Path) -> None:
 
 def test_load_proxy_config_cli_override(tmp_path: Path) -> None:
     """CLI overrides take precedence over config file."""
-    config_file = tmp_path / "config.toml"
+    config_file = tmp_path / "mantora.toml"
     config_file.write_text(
         dedent("""
         [policy]
