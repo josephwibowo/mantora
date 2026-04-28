@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/josephwibowo-mantora-badge.png)](https://mseep.ai/app/josephwibowo-mantora)
+
 # Mantora 🛡️
 
 > **The open-source run log for MCP agents.**
